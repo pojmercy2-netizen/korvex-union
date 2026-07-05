@@ -1,4 +1,6 @@
 // Compatibility alias: admin/notifications.vue calls POST /admin/notifications/send
-// but our canonical route is POST /api/admin/notifications
-import notificationsHandler from '../../admin/notifications/index.post'
-export default notificationsHandler
+// Lazy dynamic import avoids Nitro/Rollup TDZ bundling issues with same-chunk re-exports
+export default defineEventHandler(async (event) => {
+  const mod = await import('./index.post')
+  return (mod.default as any)(event)
+})

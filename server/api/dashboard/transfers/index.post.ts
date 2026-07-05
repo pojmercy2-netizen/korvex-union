@@ -4,7 +4,6 @@ import { useDb } from '../../../database/client'
 import { users } from '../../../database/schema/users'
 import { accounts } from '../../../database/schema/accounts'
 import { transfers } from '../../../database/schema/transfers'
-import { transactions } from '../../../database/schema/transactions'
 import { withErrorHandler, badRequest, forbidden } from '../../../utils/error'
 import { requireActiveUser } from '../../../utils/auth'
 import { sendSuccess } from '../../../utils/response'
@@ -46,7 +45,7 @@ export default withErrorHandler(async (event) => {
     }
   }
 
-  // 2. Fetch user's checking account (must deduct from checking)
+  // 2. Fetch user's checking account (verify sufficient balance but do NOT deduct yet)
   const [checkingAccount] = await db
     .select()
     .from(accounts)
@@ -67,53 +66,30 @@ export default withErrorHandler(async (event) => {
     throw badRequest('Insufficient funds in checking account')
   }
 
-  const newBalance = (currentBalance - validated.amount).toFixed(2)
+  // 3. Create transfer as PENDING — no balance deduction, no transaction log yet
+  //    Money stays in the account until admin approves.
+  const [newTransfer] = await db
+    .insert(transfers)
+    .values({
+      userId: authUser.id,
+      method: validated.method,
+      amount: validated.amount.toFixed(2),
+      recipientEmail: validated.email || null,
+      recipientName: validated.recipientName || null,
+      recipientPhone: validated.phone || null,
+      walletAddress: validated.walletAddress || null,
+      coin: validated.coin || null,
+      country: validated.country || null,
+      currency: validated.currency || 'USD',
+      note: validated.note || null,
+      status: 'pending'
+    })
+    .returning()
 
-  // 3. Execute inside a transaction: deduct balance, insert transfer record, insert transaction record
-  const result = await db.transaction(async (tx) => {
-    // Deduct checking account balance
-    await tx
-      .update(accounts)
-      .set({
-        balance: newBalance
-      })
-      .where(eq(accounts.id, checkingAccount.id))
-
-    // Create transfer audit entry
-    const [newTransfer] = await tx
-      .insert(transfers)
-      .values({
-        userId: authUser.id,
-        method: validated.method,
-        amount: validated.amount.toFixed(2),
-        recipientEmail: validated.email || null,
-        recipientName: validated.recipientName || null,
-        recipientPhone: validated.phone || null,
-        walletAddress: validated.walletAddress || null,
-        coin: validated.coin || null,
-        country: validated.country || null,
-        currency: validated.currency || 'USD',
-        note: validated.note || null,
-        status: 'completed'
-      })
-      .returning()
-
-    // Create transaction log entry
-    await tx
-      .insert(transactions)
-      .values({
-        accountId: checkingAccount.id,
-        userId: authUser.id,
-        type: 'transfer',
-        amount: (-validated.amount).toFixed(2),
-        description: `Sent via ${validated.method} to ${validated.recipientName || validated.email || validated.walletAddress || 'beneficiary'}`,
-        status: 'completed',
-        method: validated.method,
-        reference: `TRF${Date.now()}`
-      })
-
-    return newTransfer
-  })
-
-  return sendSuccess(event, result, `Transfer of $${validated.amount.toFixed(2)} completed successfully`, 201)
+  return sendSuccess(
+    event,
+    newTransfer,
+    `Transfer of $${validated.amount.toFixed(2)} submitted and is pending admin approval`,
+    201
+  )
 })

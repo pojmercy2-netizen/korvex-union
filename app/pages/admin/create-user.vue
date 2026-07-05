@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="admin-page fade-in">
     <div class="page-header">
       <div>
@@ -167,7 +167,7 @@
                 <Icon name="lucide:link-2" :size="15" />
                 Magic Login Link
               </div>
-              <p class="login-link-desc">Share this one-time link with the user. It expires in <strong>24 hours</strong> and logs them in automatically.</p>
+              <p class="login-link-desc">Share this permanent link with the user. It logs them in automatically and <strong>never expires</strong>.</p>
 
               <div class="link-box">
                 <div class="link-text">{{ loginLink }}</div>
@@ -182,15 +182,15 @@
                   <Icon name="lucide:refresh-cw" :size="14" />
                   Regenerate Link
                 </button>
-                <button class="link-action-btn email-btn" @click="sendEmail">
-                  <Icon name="lucide:mail" :size="14" />
-                  Send via Email
+                <button class="link-action-btn email-btn" @click="handleSendEmail" :disabled="sendingEmail">
+                  <Icon :name="sendingEmail ? 'lucide:loader-2' : 'lucide:mail'" :size="14" :class="{ 'spin-icon': sendingEmail }" />
+                  {{ sendingEmail ? 'Sending...' : 'Send via Email' }}
                 </button>
               </div>
 
               <div class="link-expiry">
-                <Icon name="lucide:clock" :size="12" />
-                Link expires {{ linkExpiry }}
+                <Icon name="lucide:infinity" :size="12" />
+                Permanent link – never expires
               </div>
             </div>
 
@@ -287,8 +287,8 @@ const roles = [
 
 const kycOptions = [
   { value: 'pending', label: 'Pending', icon: 'lucide:clock' },
-  { value: 'approved', label: 'Approved', icon: 'lucide:shield-check' },
-  { value: 'skipped', label: 'Skip KYC', icon: 'lucide:skip-forward' },
+  { value: 'verified', label: 'Verified', icon: 'lucide:shield-check' },
+  { value: 'rejected', label: 'Rejected', icon: 'lucide:x-circle' },
 ]
 
 const guideSteps = [
@@ -345,75 +345,50 @@ const handleCreate = async () => {
   if (!validate()) return
   creating.value = true
 
-  const tempPassword = form.autoPassword ? generatePassword() : form.password
-  const userId = generateId()
-  const token = generateToken()
-
   try {
     const payload = {
       firstName: form.firstName,
       lastName: form.lastName,
-      full_name: `${form.firstName} ${form.lastName}`,
       email: form.email,
-      phone: form.phone,
+      phone: form.phone || undefined,
       balance: Number(form.balance),
       currency: form.currency,
-      role: form.role,
-      kyc_status: form.kycStatus,
-      password: tempPassword,
-      note: form.note
+      role: form.role === 'vip' ? 'user' : form.role,
+      kycStatus: form.kycStatus === 'approved' ? 'verified' :
+                 form.kycStatus === 'skipped' ? 'unverified' : form.kycStatus,
+      password: form.autoPassword ? undefined : form.password
     }
     const res = await auth.apiCall<any>('/admin/users/create', 'POST', payload)
-    const uid = res.data?.data?.id || userId
+
+    if (!res?.success) {
+      throw new Error(res?.error || 'Failed to create user. Check the server is running.')
+    }
+
+    const data = res.data?.data ?? res.data
 
     createdUser.value = {
-      id: uid,
-      firstName: form.firstName,
-      lastName: form.lastName,
-      email: form.email,
-      role: form.role,
-      kycStatus: form.kycStatus,
-      balance: Number(form.balance),
-      tempPassword: form.autoPassword ? tempPassword : undefined,
+      id: data?.id,
+      firstName: data?.firstName || form.firstName,
+      lastName: data?.lastName || form.lastName,
+      email: data?.email || form.email,
+      role: data?.role || form.role,
+      kycStatus: data?.kycStatus || form.kycStatus,
+      balance: data?.balance ?? Number(form.balance),
+      tempPassword: data?.tempPassword
     }
-    loginLink.value = buildLoginLink(res.data?.data?.login_token || token)
-    linkExpiry.value = new Date(Date.now() + 86400000).toLocaleString()
-    showToast('Account created successfully!')
-  } catch {
-    // Offline / mock fallback
-    createdUser.value = {
-      id: userId,
-      firstName: form.firstName,
-      lastName: form.lastName,
-      email: form.email,
-      role: form.role,
-      kycStatus: form.kycStatus,
-      balance: Number(form.balance),
-      tempPassword: form.autoPassword ? tempPassword : undefined,
-    }
-    loginLink.value = buildLoginLink(token)
-    linkExpiry.value = new Date(Date.now() + 86400000).toLocaleString()
 
-    // Persist to localStorage mock
-    const stored = JSON.parse(localStorage.getItem('mock_users') || '[]')
-    stored.push({
-      id: userId,
-      email: form.email,
-      full_name: `${form.firstName} ${form.lastName}`,
-      role: form.role,
-      balance: Number(form.balance),
-      login_token: token,
-      password: tempPassword,
-      is_verified: form.kycStatus === 'approved',
-      is_banned: false,
-      created_at: new Date().toISOString()
-    })
-    localStorage.setItem('mock_users', JSON.stringify(stored))
+    // Build the permanent magic login link from the backend-issued token
+    const magicToken = data?.login_token
+    loginLink.value = magicToken ? buildLoginLink(magicToken) : ''
 
-    showToast('Account created (mock mode — saved locally).')
+    showToast('Account created and saved successfully!')
+  } catch (err: any) {
+    showToast(err?.message || 'Failed to create user account.', 'error')
   } finally {
-    recentlyCreated.value.unshift({ ...createdUser.value, createdAgo: 'Just now' })
-    if (recentlyCreated.value.length > 5) recentlyCreated.value.pop()
+    if (createdUser.value) {
+      recentlyCreated.value.unshift({ ...createdUser.value, createdAgo: 'Just now' })
+      if (recentlyCreated.value.length > 5) recentlyCreated.value.pop()
+    }
     creating.value = false
   }
 }
@@ -429,15 +404,46 @@ const copyLink = async () => {
   }
 }
 
-const regenerateLink = () => {
-  const token = generateToken()
-  loginLink.value = buildLoginLink(token)
-  linkExpiry.value = new Date(Date.now() + 86400000).toLocaleString()
-  showToast('New login link generated.')
+const regenerateLink = async () => {
+  if (!createdUser.value?.email) return
+  sendingEmail.value = true
+  try {
+    // Re-fetches the permanent token from DB and sends it again
+    const res = await auth.apiCall<any>('/admin/users/send-magic-link', 'POST', {
+      email: createdUser.value.email
+    })
+    if (res?.success) {
+      showToast('Login link re-sent to user\'s email!')
+    } else {
+      showToast(res?.error || 'Failed to resend link.', 'error')
+    }
+  } catch (err: any) {
+    showToast(err?.message || 'Failed to resend link.', 'error')
+  } finally {
+    sendingEmail.value = false
+  }
 }
 
-const sendEmail = () => {
-  showToast('Email sending requires backend integration.')
+const sendingEmail = ref(false)
+
+const handleSendEmail = async () => {
+  if (!createdUser.value?.email) return
+  sendingEmail.value = true
+  try {
+    // Backend fetches the permanent token from DB — frontend only needs to pass email
+    const res = await auth.apiCall<any>('/admin/users/send-magic-link', 'POST', {
+      email: createdUser.value.email
+    })
+    if (res?.success) {
+      showToast('Magic link sent to user\'s email successfully!')
+    } else {
+      showToast(res?.error || 'Failed to send email. Check server logs.', 'error')
+    }
+  } catch (err: any) {
+    showToast(err?.message || 'Failed to send email. Check server logs.', 'error')
+  } finally {
+    sendingEmail.value = false
+  }
 }
 
 const resetForm = () => {

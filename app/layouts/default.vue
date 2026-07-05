@@ -5,6 +5,8 @@
       <slot />
     </main>
     <AppFooter />
+    <GTranslate />
+    <WhatsAppWidget />
   </div>
 </template>
 

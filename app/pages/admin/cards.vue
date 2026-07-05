@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="admin-page fade-in">
     <div class="page-header">
       <div>
@@ -19,6 +19,9 @@
       <div class="filter-tabs">
         <button v-for="tab in tabs" :key="tab" class="filter-tab" :class="{ active: activeTab === tab }" @click="activeTab = tab">{{ tab }}</button>
       </div>
+      <button class="refresh-btn" @click="fetchCards" :disabled="loading" title="Refresh">
+        <Icon name="lucide:refresh-cw" :size="15" :class="{ 'spin-icon': loading }" />
+      </button>
     </div>
 
     <div class="cards-grid">
@@ -34,7 +37,7 @@
           </div>
           <div class="card-number">•••• •••• •••• {{ card.last4 }}</div>
           <div class="card-user">
-            <div class="card-avatar">{{ card.holderName[0] }}</div>
+            <div class="card-avatar">{{ (card.holderName || '?')[0] }}</div>
             <div>
               <div class="card-holder">{{ card.holderName }}</div>
               <div class="card-email">{{ card.holderEmail }}</div>
@@ -152,14 +155,17 @@ const handleTerminate = async (card: Card) => {
   finally { actionLoading.value = false }
 }
 
-onMounted(async () => {
+const fetchCards = async () => {
+  loading.value = true
   try {
     const res = await auth.apiCall<any>('/admin/cards', 'GET')
-    if (res.success && res.data?.data) cards.value = res.data.data
-    else cards.value = MOCK
+    const raw = res.data?.data?.data ?? res.data?.data ?? res.data
+    cards.value = Array.isArray(raw) ? raw : MOCK
   } catch { cards.value = MOCK }
   finally { loading.value = false }
-})
+}
+
+onMounted(() => fetchCards())
 </script>
 
 <style scoped>
@@ -182,7 +188,11 @@ onMounted(async () => {
 .filter-tabs{display:flex;gap:4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:4px}
 .filter-tab{padding:6px 14px;border-radius:7px;font-size:13px;font-weight:500;color:rgba(255,255,255,0.45);cursor:pointer;border:none;background:none;font-family:inherit;transition:all 0.18s}
 .filter-tab.active{background:rgba(99,102,241,0.2);color:#a5b4fc}
-.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:18px}
+.refresh-btn { width:36px; height:36px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:9px; color:rgba(255,255,255,0.45); cursor:pointer; transition:all 0.18s; flex-shrink:0; }
+.refresh-btn:hover { background:rgba(255,255,255,0.08); color: #fff; }
+.spin-icon{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.cards-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:16px}
 .col-span{grid-column:1/-1}
 .admin-loading{padding:40px;text-align:center;color:#94a3b8;display:flex;align-items:center;justify-content:center;gap:10px}
 .empty-state{grid-column:1/-1;text-align:center;color:rgba(255,255,255,0.25);padding:60px;background:rgba(13,20,36,0.9);border:1px solid rgba(255,255,255,0.07);border-radius:14px}

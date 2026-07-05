@@ -92,21 +92,17 @@ const handleAdminLogin = async () => {
   isLoading.value = true
   errorMessage.value = null
 
-  // Admin access validation helper
-  const isEmailAdmin = email.value.toLowerCase().includes('admin')
-
-  if (!isEmailAdmin) {
-    errorMessage.value = 'Access Denied: Only administrator accounts can authenticate here.'
-    isLoading.value = false
-    return
-  }
-
   try {
     const success = await auth.login(email.value, password.value)
     if (success) {
-      navigateTo('/admin')
+      if (auth.user.value?.isAdmin) {
+        navigateTo('/admin')
+      } else {
+        errorMessage.value = 'Access denied. Administrator privileges required.'
+        auth.logout()
+      }
     } else {
-      errorMessage.value = auth.error.value || 'Invalid admin credentials.'
+      errorMessage.value = auth.error.value || 'Invalid credentials or insufficient privileges.'
     }
   } catch (err) {
     errorMessage.value = 'An error occurred during authentication.'

@@ -181,7 +181,7 @@
                 <h4>Change Password</h4>
                 <p>Update your account password</p>
               </div>
-              <button class="secondary-btn" @click="alert('Opening password reset dialog...')">Update</button>
+              <button class="secondary-btn" @click="openPasswordModal">Update</button>
             </div>
 
             <!-- Transfer PIN Section -->
@@ -200,7 +200,7 @@
                 <h4>Two-Factor Authentication</h4>
                 <p>Secure your account with 2FA</p>
               </div>
-              <div :class="['toggle-switch', { active: twoFactor }]" @click="twoFactor = !twoFactor">
+              <div :class="['toggle-switch', { active: twoFactor }]" @click="toggle2FA">
                 <div class="toggle-slider"></div>
               </div>
             </div>
@@ -210,7 +210,7 @@
                 <h4>Active Sessions</h4>
                 <p>Manage devices logged into your account</p>
               </div>
-              <button class="secondary-btn" @click="alert('Viewing active sessions...')">View</button>
+              <button class="secondary-btn" @click="openSessionsModal">View</button>
             </div>
           </div>
         </div>
@@ -226,7 +226,7 @@
                 <h4>Email Alerts</h4>
                 <p>Receive statements and notices via email</p>
               </div>
-              <div :class="['toggle-switch', { active: emailAlerts }]" @click="emailAlerts = !emailAlerts">
+              <div :class="['toggle-switch', { active: emailAlerts }]" @click="toggleEmailAlerts">
                 <div class="toggle-slider"></div>
               </div>
             </div>
@@ -236,7 +236,7 @@
                 <h4>SMS Alerts</h4>
                 <p>Get text messages for large transactions</p>
               </div>
-              <div :class="['toggle-switch', { active: smsAlerts }]" @click="smsAlerts = !smsAlerts">
+              <div :class="['toggle-switch', { active: smsAlerts }]" @click="toggleSmsAlerts">
                 <div class="toggle-slider"></div>
               </div>
             </div>
@@ -304,6 +304,120 @@
         </form>
       </div>
     </div>
+
+    <!-- CHANGE PASSWORD MODAL -->
+    <div v-if="showPasswordModal" class="modal-overlay" @click.self="closePasswordModal">
+      <div class="modal-box">
+        <div class="modal-header">
+          <Icon name="lucide:key-round" class="modal-icon" />
+          <h2>Change Password</h2>
+          <button class="modal-close" @click="closePasswordModal"><Icon name="lucide:x" /></button>
+        </div>
+
+        <form @submit.prevent="submitPasswordChange" class="modal-body">
+          <div class="form-group">
+            <label class="form-label" for="currentPassword">Current Password</label>
+            <input
+              id="currentPassword"
+              type="password"
+              v-model="passwordForm.current"
+              class="form-input"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="newPassword">New Password</label>
+            <input
+              id="newPassword"
+              type="password"
+              v-model="passwordForm.newPassword"
+              class="form-input"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label class="form-label" for="confirmPassword">Confirm New Password</label>
+            <input
+              id="confirmPassword"
+              type="password"
+              v-model="passwordForm.confirm"
+              class="form-input"
+              required
+            />
+          </div>
+
+          <div class="modal-footer">
+            <button type="button" class="btn btn-outline" @click="closePasswordModal">Cancel</button>
+            <button type="submit" class="btn btn-primary">Update Password</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- ACTIVE SESSIONS MODAL -->
+    <div v-if="showSessionsModal" class="modal-overlay" @click.self="closeSessionsModal">
+      <div class="modal-box max-w-lg">
+        <div class="modal-header">
+          <Icon name="lucide:laptop" class="modal-icon" />
+          <h2>Active Sessions</h2>
+          <button class="modal-close" @click="closeSessionsModal"><Icon name="lucide:x" /></button>
+        </div>
+
+        <div class="modal-body max-h-96 overflow-y-auto">
+          <p class="mb-4 text-sm text-slate-500 dark:text-slate-400">
+            These devices are currently logged into your account. Revoke any unfamiliar sessions.
+          </p>
+
+          <div v-if="sessionsLoading" class="flex justify-center p-4">
+            <Icon name="lucide:loader-2" class="w-6 h-6 animate-spin text-slate-400" />
+          </div>
+
+          <div v-else-if="sessions.length === 0" class="text-center p-4 text-slate-400">
+            No active sessions found.
+          </div>
+
+          <div v-else class="space-y-4">
+            <div 
+              v-for="session in sessions" 
+              :key="session.id" 
+              class="flex items-center justify-between p-3 border border-slate-100 dark:border-slate-800 rounded-lg bg-slate-50 dark:bg-slate-900/40"
+            >
+              <div class="flex items-start gap-3">
+                <Icon 
+                  :name="session.userAgent?.toLowerCase().includes('mobi') ? 'lucide:smartphone' : 'lucide:monitor'" 
+                  class="w-5 h-5 mt-1 text-slate-500" 
+                />
+                <div>
+                  <div class="font-medium text-sm text-slate-700 dark:text-slate-200">
+                    {{ session.userAgent || 'Unknown Device' }}
+                  </div>
+                  <div class="text-xs text-slate-400 dark:text-slate-500">
+                    IP: {{ session.ipAddress || '127.0.0.1' }} • Last active: {{ formatDate(session.lastActiveAt || session.createdAt) }}
+                  </div>
+                  <div v-if="session.isCurrent" class="text-xs text-emerald-500 font-semibold mt-1">
+                    Current Session
+                  </div>
+                </div>
+              </div>
+              
+              <button 
+                v-if="!session.isCurrent"
+                class="btn btn-outline text-xs px-2.5 py-1 text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/20"
+                @click="revokeSession(session.id)"
+              >
+                Revoke
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="modal-footer">
+          <button type="button" class="btn btn-primary" @click="closeSessionsModal">Close</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -349,18 +463,158 @@ const pinForm = reactive({
 
 const auth = useAuth()
 
+// Password Form State
+const showPasswordModal = ref(false)
+const passwordForm = reactive({
+  current: '',
+  newPassword: '',
+  confirm: ''
+})
+
+const openPasswordModal = () => {
+  passwordForm.current = ''
+  passwordForm.newPassword = ''
+  passwordForm.confirm = ''
+  showPasswordModal.value = true
+}
+
+const closePasswordModal = () => {
+  showPasswordModal.value = false
+}
+
+const submitPasswordChange = async () => {
+  if (passwordForm.newPassword !== passwordForm.confirm) {
+    alert('Error: New Password and Confirm Password do not match.')
+    return
+  }
+  if (passwordForm.newPassword.length < 8) {
+    alert('Error: New Password must be at least 8 characters long.')
+    return
+  }
+
+  const res = await auth.apiCall<any>('/auth/change-password', 'POST', {
+    currentPassword: passwordForm.current,
+    newPassword: passwordForm.newPassword
+  })
+
+  if (res.success) {
+    alert('Success: Your password has been changed successfully!')
+    closePasswordModal()
+  } else {
+    alert(`Error: ${res.error || 'Failed to change password.'}`)
+  }
+}
+
+// Sessions State
+const showSessionsModal = ref(false)
+const sessionsLoading = ref(false)
+const sessions = ref<any[]>([])
+
+const openSessionsModal = () => {
+  showSessionsModal.value = true
+  fetchSessions()
+}
+
+const closeSessionsModal = () => {
+  showSessionsModal.value = false
+}
+
+const fetchSessions = async () => {
+  sessionsLoading.value = true
+  const res = await auth.apiCall<any>('/auth/sessions', 'GET')
+  sessionsLoading.value = false
+  if (res.success && res.data) {
+    const list: any[] = res.data?.data ?? res.data ?? []
+    sessions.value = list
+  }
+}
+
+const revokeSession = async (sessionId: string) => {
+  if (!confirm('Are you sure you want to revoke this session? The device will be logged out.')) {
+    return
+  }
+  const res = await auth.apiCall<any>(`/auth/sessions/${sessionId}`, 'DELETE')
+  if (res.success) {
+    alert('Session revoked successfully.')
+    fetchSessions()
+  } else {
+    alert(`Error: ${res.error || 'Failed to revoke session.'}`)
+  }
+}
+
+const formatDate = (dateStr: string) => {
+  if (!dateStr) return 'N/A'
+  return new Date(dateStr).toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
 const alert = (msg: string) => {
   if (import.meta.client) {
     window.alert(msg)
   }
 }
 
-const saveProfile = () => {
-  alert('Profile updated successfully!')
-  if (auth.user.value) {
-    auth.user.value.fullName = profile.fullName
-    auth.user.value.email = profile.email
-    localStorage.setItem('user', JSON.stringify(auth.user.value))
+const saveProfile = async () => {
+  const res = await auth.apiCall<any>('/dashboard/profile', 'PUT', {
+    fullName: profile.fullName,
+    email: profile.email,
+    phone: profile.phone,
+    address: profile.address
+  })
+
+  if (res.success) {
+    alert('Profile updated successfully!')
+    if (auth.user.value) {
+      auth.user.value.fullName = profile.fullName
+      auth.user.value.email = profile.email
+      localStorage.setItem('user', JSON.stringify(auth.user.value))
+    }
+  } else {
+    alert(`Error: ${res.error || 'Failed to update profile.'}`)
+  }
+}
+
+// Toggle operations
+const toggle2FA = async () => {
+  const nextVal = !twoFactor.value
+  const res = await auth.apiCall<any>('/dashboard/profile', 'PUT', {
+    twoFactorEnabled: nextVal ? 'true' : 'false'
+  })
+  if (res.success) {
+    twoFactor.value = nextVal
+    alert(`Success: Two-Factor Authentication has been ${nextVal ? 'enabled' : 'disabled'}.`)
+  } else {
+    alert(`Error: ${res.error || 'Failed to toggle 2FA.'}`)
+  }
+}
+
+const toggleEmailAlerts = async () => {
+  const nextVal = !emailAlerts.value
+  const res = await auth.apiCall<any>('/dashboard/profile', 'PUT', {
+    emailAlertsEnabled: nextVal ? 'true' : 'false'
+  })
+  if (res.success) {
+    emailAlerts.value = nextVal
+    alert(`Success: Email Alerts have been ${nextVal ? 'enabled' : 'disabled'}.`)
+  } else {
+    alert(`Error: ${res.error || 'Failed to toggle email alerts.'}`)
+  }
+}
+
+const toggleSmsAlerts = async () => {
+  const nextVal = !smsAlerts.value
+  const res = await auth.apiCall<any>('/dashboard/profile', 'PUT', {
+    smsAlertsEnabled: nextVal ? 'true' : 'false'
+  })
+  if (res.success) {
+    smsAlerts.value = nextVal
+    alert(`Success: SMS Alerts have been ${nextVal ? 'enabled' : 'disabled'}.`)
+  } else {
+    alert(`Error: ${res.error || 'Failed to toggle SMS alerts.'}`)
   }
 }
 
@@ -380,23 +634,36 @@ const handleKycUpload = (event: Event, side: 'front' | 'back') => {
   }
 }
 
-const submitKyc = () => {
+const submitKyc = async () => {
   if (!kycForm.documentNumber || !kycForm.expiryDate) {
     alert('Please fill in all identity document fields.')
     return
   }
-  kycStatus.value = 'Pending Verification'
-  if (import.meta.client) {
-    localStorage.setItem('kyc_status', 'Pending Verification')
-    localStorage.setItem('kyc_data', JSON.stringify({
-      documentType: kycForm.documentType,
-      documentNumber: kycForm.documentNumber,
-      expiryDate: kycForm.expiryDate,
-      frontImage: kycForm.frontImage,
-      backImage: kycForm.backImage,
-    }))
+
+  const res = await auth.apiCall<any>('/dashboard/kyc', 'POST', {
+    documentType: kycForm.documentType,
+    documentNumber: kycForm.documentNumber,
+    expiryDate: kycForm.expiryDate,
+    frontImage: kycForm.frontImage,
+    backImage: kycForm.backImage
+  })
+
+  if (res.success) {
+    kycStatus.value = 'Pending Verification'
+    if (import.meta.client) {
+      localStorage.setItem('kyc_status', 'Pending Verification')
+      localStorage.setItem('kyc_data', JSON.stringify({
+        documentType: kycForm.documentType,
+        documentNumber: kycForm.documentNumber,
+        expiryDate: kycForm.expiryDate,
+        frontImage: kycForm.frontImage,
+        backImage: kycForm.backImage,
+      }))
+    }
+    alert('Identity verification documents submitted successfully! Admin will review your application.')
+  } else {
+    alert(`Error: ${res.error || 'Failed to submit KYC.'}`)
   }
-  alert('Identity verification documents submitted successfully! Admin will review your application.')
 }
 
 const simulateApproval = () => {
@@ -432,7 +699,7 @@ const closePinModal = () => {
   showPinModal.value = false
 }
 
-const saveTransferPin = () => {
+const saveTransferPin = async () => {
   if (!/^\d{4}$/.test(pinForm.newPin)) {
     alert('Error: PIN must be exactly 4 digits.')
     return
@@ -442,28 +709,94 @@ const saveTransferPin = () => {
     return
   }
 
-  if (import.meta.client) {
-    if (hasTransferPin.value) {
+  if (hasTransferPin.value) {
+    // Verify current PIN on client/localStorage
+    if (import.meta.client) {
       const activePin = localStorage.getItem('transfer_pin')
       if (pinForm.current !== activePin) {
         alert('Error: The current PIN you entered is incorrect.')
         return
       }
     }
+  }
 
-    localStorage.setItem('transfer_pin', pinForm.newPin)
+  const res = await auth.apiCall<any>('/dashboard/profile', 'PUT', {
+    transferPin: pinForm.newPin
+  })
+
+  if (res.success) {
+    if (import.meta.client) {
+      localStorage.setItem('transfer_pin', pinForm.newPin)
+    }
     hasTransferPin.value = true
     closePinModal()
     alert('Success: Your transfer PIN has been updated successfully!')
+  } else {
+    alert(`Error: ${res.error || 'Failed to update transfer PIN.'}`)
   }
 }
 
-onMounted(() => {
-  if (auth.user.value) {
+onMounted(async () => {
+  // Load profile details from server
+  const profileRes = await auth.apiCall<any>('/dashboard/profile', 'GET')
+  if (profileRes.success && profileRes.data) {
+    const data = profileRes.data?.data ?? profileRes.data
+    profile.fullName = data.fullName || ''
+    profile.email = data.email || ''
+    profile.phone = data.phone || ''
+    profile.address = data.address || ''
+    twoFactor.value = data.twoFactorEnabled === 'true'
+    emailAlerts.value = data.emailAlertsEnabled === 'true'
+    smsAlerts.value = data.smsAlertsEnabled === 'true'
+    hasTransferPin.value = data.hasTransferPin || !!data.transferPin
+
+    // Use profile kycStatus as authoritative source (set directly by admin approval)
+    const profileKycStatus = data.kycStatus as string | undefined
+    if (profileKycStatus === 'verified') {
+      kycStatus.value = 'Verified'
+      if (import.meta.client) localStorage.setItem('kyc_status', 'Verified')
+    } else if (profileKycStatus === 'pending') {
+      kycStatus.value = 'Pending Verification'
+      if (import.meta.client) localStorage.setItem('kyc_status', 'Pending Verification')
+    } else if (profileKycStatus === 'rejected') {
+      kycStatus.value = 'Unverified'
+      if (import.meta.client) localStorage.setItem('kyc_status', 'Unverified')
+    } else if (profileKycStatus === 'unverified') {
+      kycStatus.value = 'Unverified'
+      if (import.meta.client) localStorage.setItem('kyc_status', 'Unverified')
+    }
+  } else if (auth.user.value) {
     profile.fullName = auth.user.value.fullName
     profile.email = auth.user.value.email
   }
-  if (import.meta.client) {
+
+  // Load KYC document details from server (for document form prefill)
+  const kycRes = await auth.apiCall<any>('/dashboard/kyc', 'GET')
+  if (kycRes.success && kycRes.data) {
+    const data = kycRes.data?.data ?? kycRes.data
+
+    // Only update display status from document if profile didn't give a clear verified status
+    if (!['Verified', 'Pending Verification'].includes(kycStatus.value)) {
+      if (data.status === 'PENDING') {
+        kycStatus.value = 'Pending Verification'
+        if (import.meta.client) localStorage.setItem('kyc_status', 'Pending Verification')
+      } else if (data.status === 'APPROVED') {
+        kycStatus.value = 'Verified'
+        if (import.meta.client) localStorage.setItem('kyc_status', 'Verified')
+      } else if (data.status === 'REJECTED') {
+        kycStatus.value = 'Unverified'
+        if (import.meta.client) localStorage.setItem('kyc_status', 'Unverified')
+      }
+    }
+
+    if (data.documentType) {
+      kycForm.documentType = data.documentType
+      kycForm.documentNumber = data.documentNumber || ''
+      kycForm.expiryDate = data.expiryDate || ''
+      kycForm.frontImage = data.frontImageUrl || null
+      kycForm.backImage = data.backImageUrl || null
+    }
+  } else if (import.meta.client) {
     const status = localStorage.getItem('kyc_status')
     if (status) {
       kycStatus.value = status
@@ -477,10 +810,10 @@ onMounted(() => {
       kycForm.frontImage = parsed.frontImage
       kycForm.backImage = parsed.backImage
     }
-
-    // Check if transfer PIN exists in localStorage
     const savedPin = localStorage.getItem('transfer_pin')
-    hasTransferPin.value = !!savedPin
+    if (savedPin) {
+      hasTransferPin.value = true
+    }
   }
 })
 </script>

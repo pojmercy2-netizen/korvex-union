@@ -12,12 +12,27 @@ export interface User {
 const API_BASE_URL = '/api'
 
 export const useAuth = () => {
-  const user = useState<User | null>('auth-user', () => null)
-  const token = useState<string | null>('auth-token', () => null)
+  const user = useState<User | null>('auth-user', () => {
+    if (import.meta.client) {
+      try {
+        const savedUser = localStorage.getItem('user')
+        return savedUser ? JSON.parse(savedUser) : null
+      } catch {
+        return null
+      }
+    }
+    return null
+  })
+  const token = useState<string | null>('auth-token', () => {
+    if (import.meta.client) {
+      return localStorage.getItem('authToken')
+    }
+    return null
+  })
   const isLoading = ref(false)
   const error = ref<string | null>(null)
 
-  // Safe client side initialization
+  // Safe client side initialization and synchronisation fallback
   onMounted(() => {
     const savedToken = localStorage.getItem('authToken')
     const savedUser = localStorage.getItem('user')
@@ -49,55 +64,109 @@ export const useAuth = () => {
     }
   }
 
+  // Internal flag to prevent infinite refresh loops
+  let _isRefreshing = false
+  let _refreshPromise: Promise<string | null> | null = null
+
+  const silentRefresh = async (): Promise<string | null> => {
+    // Deduplicate concurrent refresh calls
+    if (_isRefreshing && _refreshPromise) return _refreshPromise
+
+    _isRefreshing = true
+    _refreshPromise = (async () => {
+      try {
+        // The httpOnly refresh_token cookie is sent automatically by the browser
+        const res = await fetch(`${API_BASE_URL}/auth/refresh-token`, {
+          method: 'POST',
+          credentials: 'include', // ensures cookie is sent
+          headers: { 'Content-Type': 'application/json' }
+        })
+
+        if (!res.ok) return null
+
+        const json = await res.json()
+        // sendSuccess wraps: { success, data: { access_token, refresh_token } }
+        const payload = json?.data?.data ?? json?.data ?? json
+        const newToken = payload?.access_token
+
+        if (newToken) {
+          token.value = newToken
+          localStorage.setItem('authToken', newToken)
+          return newToken
+        }
+        return null
+      } catch {
+        return null
+      } finally {
+        _isRefreshing = false
+        _refreshPromise = null
+      }
+    })()
+
+    return _refreshPromise
+  }
+
   const apiCall = async <T = any>(
     endpoint: string,
     method: 'GET' | 'POST' | 'PUT' | 'DELETE' = 'GET',
-    bodyData?: Record<string, any>
+    bodyData?: Record<string, any>,
+    _isRetry = false  // internal: prevents infinite retry loops
   ): Promise<{ success: boolean; data?: T; error?: string }> => {
-    try {
+    const makeRequest = async (accessToken: string | null) => {
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
       }
-
-      const activeToken = token.value || localStorage.getItem('authToken')
-      if (activeToken) {
-        headers['Authorization'] = `Bearer ${activeToken}`
+      if (accessToken) {
+        headers['Authorization'] = `Bearer ${accessToken}`
       }
 
       const options: RequestInit = {
         method,
-        headers
+        headers,
+        credentials: 'include' // send cookies (refresh_token) on every request
       }
 
       if ((method === 'POST' || method === 'PUT') && bodyData) {
         options.body = JSON.stringify(bodyData)
       }
 
-      const response = await fetch(`${API_BASE_URL}${endpoint}`, options)
+      return fetch(`${API_BASE_URL}${endpoint}`, options)
+    }
+
+    try {
+      const activeToken = token.value || localStorage.getItem('authToken')
+      let response = await makeRequest(activeToken)
+
+      // Silent refresh on 401 for non-auth endpoints
+      const isAuthEndpoint = endpoint.startsWith('/auth/')
+      if (response.status === 401 && !isAuthEndpoint && !_isRetry) {
+        const newToken = await silentRefresh()
+
+        if (newToken) {
+          // Retry original request with fresh token
+          response = await makeRequest(newToken)
+        } else {
+          // Refresh failed — session truly expired, force logout
+          logout()
+          const isDashboard = endpoint.startsWith('/dashboard') || !endpoint.startsWith('/admin')
+          navigateTo(isDashboard ? '/login' : '/admin/login')
+          return { success: false, error: 'Session expired. Please log in again.' }
+        }
+      }
 
       if (!response.ok) {
-        if (response.status === 401) {
-          logout()
-          navigateTo('/login')
-        }
         const errJson = await response.json().catch(() => ({}))
-        return {
-          success: false,
-          error: errJson.error || `HTTP error ${response.status}`
-        }
+        const errorMsg = typeof errJson.error === 'object' && errJson.error
+          ? errJson.error.message
+          : (errJson.error || errJson.message || `HTTP error ${response.status}`)
+        return { success: false, error: errorMsg }
       }
 
       const result = await response.json()
-      return {
-        success: true,
-        data: result
-      }
+      return { success: true, data: result }
     } catch (e: any) {
       console.error('API Call Error:', e)
-      return {
-        success: false,
-        error: e.message || 'Network connection failed'
-      }
+      return { success: false, error: e.message || 'Network connection failed' }
     }
   }
 
@@ -138,24 +207,33 @@ export const useAuth = () => {
         return true
       }
 
-      const response = await apiCall<{ access_token: string; user: any }>('/auth/login', 'POST', {
+      const response = await apiCall<any>('/auth/login', 'POST', {
         email: emailVal,
         password: passwordVal
       })
 
-      if (response.success && response.data?.access_token) {
-        token.value = response.data.access_token
-        localStorage.setItem('authToken', token.value)
+      // apiCall wraps the server response in { success, data }.
+      // The server returns { success, data: { access_token, user } }, so the
+      // actual payload is at response.data.data (or response.data if already flat).
+      const loginPayload = response.data?.data ?? response.data
 
-        // Fetch full profile using the new Nuxt backend endpoint
+      if (response.success && loginPayload?.access_token) {
+        token.value = loginPayload.access_token
+        localStorage.setItem('authToken', loginPayload.access_token)
+
+              // Fetch full profile using the Nuxt backend endpoint
         const profileRes = await apiCall<any>('/dashboard/profile', 'GET')
-        if (profileRes.success && profileRes.data) {
-          const profile = profileRes.data
-          const isAdminUser = profile.role === 'admin' || profile.role === 'superadmin'
+        // apiCall wraps server JSON: { success, data: <serverJson> }
+        // Server sendSuccess returns: { success, data: user }
+        // So actual user is at profileRes.data?.data?.data ?? profileRes.data?.data
+        const profileData = profileRes.data?.data?.data ?? profileRes.data?.data ?? profileRes.data
+
+        if (profileRes.success && profileData) {
+          const isAdminUser = profileData.role === 'admin' || profileData.role === 'superadmin'
           const userData: User = {
-            id: profile.id?.toString() || '1001',
-            email: profile.email,
-            fullName: profile.fullName || profile.full_name || emailVal.split('@')[0],
+            id: profileData.id?.toString() || '1001',
+            email: profileData.email || emailVal,
+            fullName: profileData.fullName || profileData.full_name || emailVal.split('@')[0],
             accountType: 'checking',
             isAdmin: isAdminUser
           }
@@ -174,7 +252,7 @@ export const useAuth = () => {
         }
       }
 
-      error.value = response.error || 'Login failed'
+      error.value = response.error || (response.data?.error?.message) || 'Login failed. Check your credentials.'
       isLoading.value = false
       return false
     } catch (e: any) {
@@ -221,13 +299,12 @@ export const useAuth = () => {
         return true
       }
 
-      const username = emailVal.split('@')[0] || ''
       const regResponse = await apiCall<any>('/auth/register', 'POST', {
         email: emailVal,
         password: passwordVal,
         full_name: fullNameVal,
-        username,
-        phone: phoneVal
+        // username omitted — backend auto-generates a unique one from email prefix + random suffix
+        phone: phoneVal || undefined
       })
 
       if (!regResponse.success) {

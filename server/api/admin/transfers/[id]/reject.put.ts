@@ -26,9 +26,14 @@ export default withErrorHandler(async (event) => {
     throw notFound('Transfer')
   }
 
+  if (transfer.status !== 'pending') {
+    throw badRequest('Only pending transfers can be rejected')
+  }
+
+  // Mark transfer as failed — no balance was deducted, so nothing to restore
   await db
     .update(transfers)
-    .set({ status: 'failed' }) // or rejected
+    .set({ status: 'failed' })
     .where(eq(transfers.id, transferId))
 
   await logAdminAction(event, {
@@ -39,5 +44,5 @@ export default withErrorHandler(async (event) => {
     details: { amount: transfer.amount, method: transfer.method }
   })
 
-  return sendSuccess(event, null, 'Transfer rejected successfully')
+  return sendSuccess(event, null, 'Transfer rejected. No funds were deducted from the user account.')
 })

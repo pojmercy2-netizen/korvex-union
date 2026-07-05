@@ -7,14 +7,7 @@
   >
     <!-- Brand lockup -->
     <div class="page-loader-brand">
-      <div class="page-loader-icon">
-        <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-          <path d="M2 20 L8 8 L12 14 L16 6 L22 20 Z" />
-        </svg>
-      </div>
-      <div class="page-loader-wordmark">
-        Bee<span>con</span>
-      </div>
+      <img src="/logo.png" alt="Korvex Union Bank" class="page-loader-logo" />
     </div>
 
     <!-- Progress bar -->
@@ -54,18 +47,18 @@ onMounted(() => {
   // Cycle status messages
   interval = setInterval(() => {
     statusIdx.value = (statusIdx.value + 1) % statusMessages.length
-  }, 600)
+  }, 200)
 
   // Simulated load completion timer
   timer1 = setTimeout(() => {
     clearInterval(interval)
     exiting.value = true
 
-    // Unmount after exit animation (750ms)
+    // Unmount after exit animation (300ms)
     timer2 = setTimeout(() => {
       visible.value = false
-    }, 750)
-  }, 1400)
+    }, 300)
+  }, 600)
 })
 
 onBeforeUnmount(() => {
@@ -85,7 +78,7 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #0A192F 0%, #112240 60%, #0A192F 100%);
+  background: linear-gradient(135deg, #ffffff 0%, #f0f6ff 60%, #e8f0fe 100%);
   gap: 32px;
 
   /* entrance */
@@ -94,46 +87,15 @@ onBeforeUnmount(() => {
 
 /* exit class toggled by JS */
 .page-loader-overlay.loader-exit {
-  animation: loader-fade-out 0.75s ease-in both;
+  animation: loader-fade-out 0.3s ease-in both;
   pointer-events: none;
 }
 
-/* ── Logo lockup ─────────────────────────────────────────────── */
-.page-loader-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  animation: loader-slide-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.05s both;
-}
-
-.page-loader-icon {
-  width: 48px;
-  height: 48px;
-  background: linear-gradient(135deg, #0066FF, #00c6ff);
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  box-shadow: 0 0 32px rgba(0, 102, 255, 0.45);
-  animation: loader-pulse 2s ease-in-out infinite;
-}
-
-.page-loader-icon svg {
-  width: 26px;
-  height: 26px;
-  fill: #ffffff;
-}
-
-.page-loader-wordmark {
-  font-family: 'Inter', sans-serif;
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: -0.5px;
-  color: #ffffff;
-}
-
-.page-loader-wordmark span {
-  color: #0066FF;
+.page-loader-logo {
+  height: 160px;
+  width: auto;
+  max-width: 680px;
+  object-fit: contain;
 }
 
 /* ── Progress bar ────────────────────────────────────────────── */
@@ -151,7 +113,7 @@ onBeforeUnmount(() => {
   width: 0%;
   background: linear-gradient(90deg, #0066FF, #00c6ff);
   border-radius: 100px;
-  animation: loader-bar-progress 0.7s cubic-bezier(0.4, 0, 0.2, 1) 0.15s both;
+  animation: loader-bar-progress 0.35s cubic-bezier(0.4, 0, 0.2, 1) 0.1s both;
   box-shadow: 0 0 10px rgba(0, 198, 255, 0.6);
 }
 
@@ -162,7 +124,7 @@ onBeforeUnmount(() => {
   font-weight: 500;
   letter-spacing: 2px;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.35);
+  color: rgba(10, 25, 47, 0.4);
   animation: loader-slide-up 0.45s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both,
              loader-text-cycle 1.8s ease-in-out 0.4s infinite;
 }

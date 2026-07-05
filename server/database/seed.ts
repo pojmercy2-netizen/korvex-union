@@ -97,6 +97,10 @@ async function main() {
     })
     .returning()
 
+  if (!adminUser || !john || !jane || !michael) {
+    throw new Error('Failed to seed user records')
+  }
+
   // 3. Seed Accounts
   // John Smith Accounts
   const [johnChecking] = await db
@@ -144,6 +148,10 @@ async function main() {
       currency: 'USD'
     })
     .returning()
+
+  if (!johnChecking || !johnSavings || !janeChecking || !michaelChecking) {
+    throw new Error('Failed to seed account records')
+  }
 
   // 4. Seed Transactions
   await db.insert(transactions).values([

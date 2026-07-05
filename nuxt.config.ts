@@ -41,11 +41,11 @@ export default defineNuxtConfig({
   colorMode: {
     classSuffix: '',
     preference: 'light',
-    fallback: 'light'
+    fallback: 'light',
+    storageKey: 'korvex-color-mode-v2'
   },
 
   app: {
-    pageTransition: { name: 'page', mode: 'out-in' },
     head: {
       title: 'Korvex Union — Bank Smarter. Live Better.',
       meta: [
@@ -55,6 +55,7 @@ export default defineNuxtConfig({
         { name: 'theme-color', content: '#0A192F' }
       ],
       link: [
+        { rel: 'icon', type: 'image/png', href: '/favicon.png' },
         { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
         { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
         { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap' }

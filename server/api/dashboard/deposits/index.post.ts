@@ -38,6 +38,10 @@ export default withErrorHandler(async (event) => {
     })
     .returning()
 
+  if (!newDeposit) {
+    throw new Error('Failed to submit deposit request')
+  }
+
   return sendSuccess(
     event,
     {

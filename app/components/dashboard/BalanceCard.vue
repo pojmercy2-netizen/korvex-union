@@ -68,7 +68,9 @@ const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val)
 }
 
-onMounted(() => {
+const auth = useAuth()
+
+onMounted(async () => {
   if (import.meta.client) {
     const status = localStorage.getItem('kyc_status')
     if (status) {
@@ -76,6 +78,37 @@ onMounted(() => {
     } else {
       localStorage.setItem('kyc_status', 'Unverified')
       kycStatus.value = 'Unverified'
+    }
+
+    if (props.showKyc) {
+      try {
+        // Use profile kycStatus as the most authoritative source
+        // (admin approval writes directly to users.kycStatus)
+        const profileRes = await auth.apiCall<any>('/dashboard/profile', 'GET')
+        if (profileRes.success && profileRes.data) {
+          const profileData = profileRes.data?.data ?? profileRes.data
+          const raw = profileData.kycStatus as string | undefined
+          let displayStatus = 'Unverified'
+          if (raw === 'verified') displayStatus = 'Verified'
+          else if (raw === 'pending') displayStatus = 'Pending Verification'
+          else if (raw === 'rejected') displayStatus = 'Unverified'
+          kycStatus.value = displayStatus
+          localStorage.setItem('kyc_status', displayStatus)
+        } else {
+          // Fallback: read kycDocuments status
+          const kycRes = await auth.apiCall<any>('/dashboard/kyc', 'GET')
+          if (kycRes.success && kycRes.data) {
+            const data = kycRes.data?.data ?? kycRes.data
+            let displayStatus = 'Unverified'
+            if (data.status === 'PENDING') displayStatus = 'Pending Verification'
+            else if (data.status === 'APPROVED') displayStatus = 'Verified'
+            kycStatus.value = displayStatus
+            localStorage.setItem('kyc_status', displayStatus)
+          }
+        }
+      } catch (err) {
+        console.error('Error fetching KYC status:', err)
+      }
     }
   }
 })

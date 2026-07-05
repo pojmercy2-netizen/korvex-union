@@ -70,10 +70,10 @@
 
         <div class="topbar-actions">
 
-          <NuxtLink to="/dashboard/alerts" class="topbar-action-item">
+          <NuxtLink to="/dashboard/alerts" class="topbar-action-item bell-btn">
             <Icon name="lucide:bell" :size="20" class="topbar-icon" />
+            <span v-if="unreadNotifCount > 0" class="bell-badge">{{ unreadNotifCount > 9 ? '9+' : unreadNotifCount }}</span>
           </NuxtLink>
-          <ThemeToggle />
           <NuxtLink to="/dashboard/settings" class="user-profile">
             <div class="user-avatar-circle">
               <Icon name="lucide:user" class="w-5 h-5 text-slate-400" />
@@ -95,7 +95,7 @@
       <!-- Footer -->
       <footer class="dashboard-footer">
         <div class="footer-left">
-          © {{ new Date().getFullYear() }} Korvex Union. All rights reserved.
+          © 2012 – {{ new Date().getFullYear() }} Korvex Union. All rights reserved.
         </div>
         <div class="footer-right">
           <a href="#">Privacy Policy</a>
@@ -164,10 +164,13 @@
         <span>Account</span>
       </NuxtLink>
     </nav>
+    <GTranslate />
+    <WhatsAppWidget />
   </div>
 </template>
 
 <script setup lang="ts">
+import { onUnmounted } from 'vue'
 const route = useRoute()
 const router = useRouter()
 const isSidebarOpen = ref(false)
@@ -201,11 +204,39 @@ const initials = computed(() =>
   fullName.value.split(' ').map((n: string) => n[0]).join('').substring(0, 2).toUpperCase()
 )
 
+/* ---- notification badge ---- */
+const auth = useAuth()
+const unreadNotifCount = ref(0)
+
+const fetchUnreadCount = async () => {
+  try {
+    const res = await auth.apiCall<any>('/dashboard/notifications', 'GET')
+    if (res?.success && res?.data) {
+      const list: any[] = Array.isArray(res.data) ? res.data : res.data?.data ?? []
+      unreadNotifCount.value = list.filter((n: any) => !n.isRead && !n.is_read).length
+    }
+  } catch { /* silent */ }
+}
+
+let notifPollTimer: ReturnType<typeof setInterval> | null = null
+
 onMounted(() => {
   const userStr = localStorage.getItem('user')
   const user = userStr ? JSON.parse(userStr) : null
   if (user?.fullName) {
     fullName.value = user.fullName
+  }
+  fetchUnreadCount()
+  notifPollTimer = setInterval(fetchUnreadCount, 60_000)
+  if (import.meta.client) {
+    window.addEventListener('notifications:updated', fetchUnreadCount)
+  }
+})
+
+onUnmounted(() => {
+  if (notifPollTimer) clearInterval(notifPollTimer)
+  if (import.meta.client) {
+    window.removeEventListener('notifications:updated', fetchUnreadCount)
   }
 })
 
@@ -216,7 +247,15 @@ const greeting = computed(() => {
   return 'Good evening'
 })
 
-const navItems = [
+interface NavItem {
+  path: string
+  label: string
+  icon: string
+  exact?: boolean
+  badge?: string | number
+}
+
+const navItems: NavItem[] = [
   { path: '/dashboard', label: 'Dashboard', icon: 'lucide:home', exact: true },
   { path: '/dashboard/accounts', label: 'Accounts', icon: 'lucide:wallet-cards' },
   { path: '/dashboard/transactions', label: 'Transactions', icon: 'lucide:arrow-right-left' },
@@ -313,8 +352,9 @@ watch(() => route.path, () => {
 }
 
 .logo-img {
-  width: 236px;
-  height: 76px;
+  height: 152px;
+  width: auto;
+  max-width: 472px;
   object-fit: contain;
 }
 
@@ -437,22 +477,22 @@ watch(() => route.path, () => {
     flex: 1;
   }
   .mobile-logo-img {
-    height: 72px;
+    height: 144px;
     width: auto;
-    max-width: 290px;
+    max-width: 480px;
     object-fit: contain;
     transition: all 0.2s ease;
   }
   @media (max-width: 640px) {
     .mobile-logo-img {
-      height: 56px;
-      max-width: 230px;
+      height: 112px;
+      max-width: 380px;
     }
   }
   @media (max-width: 400px) {
     .mobile-logo-img {
-      height: 44px;
-      max-width: 175px;
+      height: 88px;
+      max-width: 300px;
     }
   }
 
@@ -597,10 +637,6 @@ watch(() => route.path, () => {
   flex-shrink: 0;
   border: 1px solid var(--color-border);
 }
-.dark .user-avatar-circle {
-  background: #1e293b;
-  border-color: var(--color-border-dark);
-}
 
 .user-info {
   display: flex;
@@ -637,19 +673,6 @@ watch(() => route.path, () => {
   .user-avatar-circle {
     width: 26px;
     height: 26px;
-  }
-
-  /* Shrink theme toggle track */
-  .theme-toggle-track {
-    width: 38px !important;
-    height: 22px !important;
-  }
-  .theme-toggle-thumb {
-    width: 16px !important;
-    height: 16px !important;
-  }
-  .theme-toggle-thumb.dark {
-    transform: translateX(16px) !important;
   }
 }
 

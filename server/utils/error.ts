@@ -3,7 +3,7 @@ import { ZodError } from 'zod'
 
 export class ApiError extends Error {
   constructor(
-    public message: string,
+    message: string,
     public statusCode: number = 500,
     public code: string = 'INTERNAL_ERROR'
   ) {
@@ -23,14 +23,15 @@ export function withErrorHandler<T>(handler: (event: H3Event) => Promise<T>): Ev
     } catch (err: unknown) {
       // Zod validation errors → 400
       if (err instanceof ZodError) {
-        const messages = err.errors.map(e => `${e.path.join('.')}: ${e.message}`).join('; ')
+        const issues = err.issues || (err as any).errors || []
+        const messages = issues.map((e: any) => `${e.path.join('.')}: ${e.message}`).join('; ')
         setResponseStatus(event, 400)
         return {
           success: false,
           error: {
             code: 'VALIDATION_ERROR',
             message: messages,
-            details: err.errors
+            details: issues
           }
         }
       }

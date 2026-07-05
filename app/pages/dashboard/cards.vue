@@ -233,13 +233,37 @@ const modalType = ref<'virtual' | 'physical'>('virtual')
 
 const form = ref({ purpose: '', address: '', theme: 'standard' })
 
-onMounted(() => {
-  if (import.meta.client) {
-    const vc = localStorage.getItem('virtual_card_request')
-    if (vc) virtualCard.value = JSON.parse(vc)
-    const pc = localStorage.getItem('physical_card_request')
-    if (pc) physicalCard.value = JSON.parse(pc)
+const loadCards = async () => {
+  const res = await auth.apiCall<any>('/dashboard/cards', 'GET')
+  if (res.success && res.data) {
+    const cardsList: any[] = res.data?.data ?? res.data ?? []
+    
+    // Find virtual card
+    const vc = cardsList.find((c: any) => c.cardType === 'virtual')
+    if (vc) {
+      virtualCard.value = {
+        status: vc.status === 'active' || vc.status === 'frozen' ? 'APPROVED' : 'NONE',
+        lastFour: vc.cardNumber ? vc.cardNumber.slice(-4) : '0000'
+      }
+    } else {
+      virtualCard.value = { status: 'NONE', lastFour: '' }
+    }
+
+    // Find physical card (debit or credit)
+    const pc = cardsList.find((c: any) => c.cardType === 'debit' || c.cardType === 'credit')
+    if (pc) {
+      physicalCard.value = {
+        status: pc.status === 'active' || pc.status === 'frozen' ? 'APPROVED' : 'NONE',
+        lastFour: pc.cardNumber ? pc.cardNumber.slice(-4) : '0000'
+      }
+    } else {
+      physicalCard.value = { status: 'NONE', lastFour: '' }
+    }
   }
+}
+
+onMounted(() => {
+  loadCards()
 })
 
 const openModal = (type: 'virtual' | 'physical') => {
@@ -252,21 +276,23 @@ const closeModal = () => {
   showModal.value = false
 }
 
-const submitRequest = () => {
-  const lastFour = String(Math.floor(1000 + Math.random() * 9000))
-  const record: CardRecord = { status: 'PENDING', lastFour }
+const submitRequest = async () => {
+  const cardTypeVal = modalType.value === 'virtual' ? 'virtual' : 'debit'
+  const res = await auth.apiCall<any>('/dashboard/cards', 'POST', {
+    cardType: cardTypeVal,
+    purpose: form.value.purpose
+  })
 
-  if (modalType.value === 'virtual') {
-    virtualCard.value = record
-    if (import.meta.client) localStorage.setItem('virtual_card_request', JSON.stringify(record))
+  if (res.success) {
+    await loadCards()
+    closeModal()
+    if (import.meta.client) {
+      window.alert(`✓ ${modalType.value === 'virtual' ? 'Virtual' : 'Physical'} card generated successfully!`)
+    }
   } else {
-    physicalCard.value = record
-    if (import.meta.client) localStorage.setItem('physical_card_request', JSON.stringify(record))
-  }
-
-  closeModal()
-  if (import.meta.client) {
-    window.alert(`✓ ${modalType.value === 'virtual' ? 'Virtual' : 'Physical'} card request submitted!\n\nYour request is now pending admin approval.`)
+    if (import.meta.client) {
+      window.alert(`Failed to create card: ${res.error || 'Unknown error'}`)
+    }
   }
 }
 </script>

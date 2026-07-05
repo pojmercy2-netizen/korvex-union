@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="admin-page fade-in">
     <div class="page-header">
       <div>
@@ -15,7 +15,7 @@
     <div v-else>
       <!-- Stats Grid -->
       <div class="stats-grid">
-        <div class="stat-card" v-for="stat in statCards" :key="stat.label">
+        <div class="stat-card" v-for="stat in statCards" :key="stat.label" @click="navigateTo(stat.path)" style="cursor: pointer;">
           <div class="stat-icon" :style="{ background: stat.iconBg }">
             <Icon :name="stat.icon" :size="20" :style="{ color: stat.iconColor }" />
           </div>
@@ -99,12 +99,12 @@ const auth = useAuth()
 const todayDate = computed(() => new Date().toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }))
 
 const statCards = ref([
-  { label: 'Total Users', value: '142', icon: 'lucide:users', iconBg: 'rgba(99,102,241,0.15)', iconColor: '#818cf8', trend: '+12 this week', trendUp: true },
-  { label: 'Total Transactions', value: '1,284', icon: 'lucide:arrow-left-right', iconBg: 'rgba(16,185,129,0.12)', iconColor: '#34d399', trend: '+87 today', trendUp: true },
-  { label: 'Pending KYC', value: '3', icon: 'lucide:shield-alert', iconBg: 'rgba(245,158,11,0.12)', iconColor: '#fbbf24', trend: '2 new today', trendUp: false },
-  { label: 'Active Loans', value: '18', icon: 'lucide:hand-coins', iconBg: 'rgba(59,130,246,0.12)', iconColor: '#60a5fa', trend: '+3 this month', trendUp: true },
-  { label: 'Total Volume', value: '$284,200', icon: 'lucide:dollar-sign', iconBg: 'rgba(16,185,129,0.12)', iconColor: '#34d399', trend: '+$12k today', trendUp: true },
-  { label: 'Pending Withdrawals', value: '5', icon: 'lucide:clock', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#f87171', trend: 'Needs review', trendUp: false },
+  { label: 'Total Users', value: '0', icon: 'lucide:users', iconBg: 'rgba(99,102,241,0.15)', iconColor: '#818cf8', trend: 'Registered users', trendUp: true, path: '/admin/users' },
+  { label: 'Total Transactions', value: '0', icon: 'lucide:arrow-left-right', iconBg: 'rgba(16,185,129,0.12)', iconColor: '#34d399', trend: 'System total', trendUp: true, path: '/admin/transactions' },
+  { label: 'Pending KYC', value: '0', icon: 'lucide:shield-alert', iconBg: 'rgba(245,158,11,0.12)', iconColor: '#fbbf24', trend: 'Awaiting review', trendUp: false, path: '/admin/kyc' },
+  { label: 'Active Loans', value: '0', icon: 'lucide:hand-coins', iconBg: 'rgba(59,130,246,0.12)', iconColor: '#60a5fa', trend: 'Applications', trendUp: true, path: '/admin/loans' },
+  { label: 'Total Volume', value: '$0.00', icon: 'lucide:dollar-sign', iconBg: 'rgba(16,185,129,0.12)', iconColor: '#34d399', trend: 'Total volume', trendUp: true, path: '/admin/transactions' },
+  { label: 'Pending Withdrawals', value: '0', icon: 'lucide:clock', iconBg: 'rgba(239,68,68,0.12)', iconColor: '#f87171', trend: 'Needs review', trendUp: false, path: '/admin/transactions' },
 ])
 
 const quickActions = [
@@ -116,30 +116,51 @@ const quickActions = [
   { label: 'Notifications', path: '/admin/notifications', icon: 'lucide:megaphone', bg: 'rgba(239,68,68,0.15)', color: '#f87171' },
 ]
 
-const recentTransactions = [
-  { id: 1, type: 'deposit', label: 'John Smith deposited', amount: '2,650.00', time: '2 min ago' },
-  { id: 2, type: 'withdrawal', label: 'Jane Doe withdrawal', amount: '120.00', time: '14 min ago' },
-  { id: 3, type: 'transfer', label: 'Michael B. transferred', amount: '50.00', time: '1 hr ago' },
-  { id: 4, type: 'deposit', label: 'Sarah K. deposited', amount: '800.00', time: '3 hr ago' },
-]
+const recentTransactions = ref<any[]>([])
 
-const pendingItems = [
-  { count: 3, label: 'KYC Submissions', sub: 'Awaiting document review', icon: 'lucide:shield-alert', path: '/admin/kyc' },
-  { count: 5, label: 'Pending Withdrawals', sub: 'Require manual approval', icon: 'lucide:upload', path: '/admin/transactions' },
-  { count: 2, label: 'Loan Applications', sub: 'Ready for decision', icon: 'lucide:hand-coins', path: '/admin/loans' },
-]
+const pendingItems = ref([
+  { count: 0, label: 'KYC Submissions', sub: 'Awaiting document review', icon: 'lucide:shield-alert', path: '/admin/kyc' },
+  { count: 0, label: 'Pending Withdrawals', sub: 'Require manual approval', icon: 'lucide:upload', path: '/admin/transactions' },
+  { count: 0, label: 'Loan Applications', sub: 'Ready for decision', icon: 'lucide:hand-coins', path: '/admin/loans' },
+])
 
 onMounted(async () => {
   try {
     const res = await auth.apiCall<any>('/admin/dashboard', 'GET')
-    if (res.success && res.data?.data) {
-      const d = res.data.data
-      statCards.value[0].value = String(d.total_users ?? 142)
-      statCards.value[1].value = String(d.total_transactions ?? 1284)
-      statCards.value[2].value = String(d.pending_kyc ?? 3)
+    const d = res.data?.data?.data ?? res.data?.data ?? res.data
+    if (d && typeof d === 'object') {
+      if (statCards.value[0]) statCards.value[0].value = String(d.total_users ?? 0)
+      if (statCards.value[1]) statCards.value[1].value = String(d.total_transactions ?? 0)
+      if (statCards.value[2]) statCards.value[2].value = String(d.pending_kyc ?? 0)
+      if (statCards.value[3]) statCards.value[3].value = String(d.active_loans ?? 0)
+      if (statCards.value[4]) statCards.value[4].value = `$${Number(d.total_volume || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
+      if (statCards.value[5]) statCards.value[5].value = String(d.pending_withdrawals ?? 0)
+
+      if (pendingItems.value[0]) pendingItems.value[0].count = d.pending_kyc ?? 0
+      if (pendingItems.value[1]) pendingItems.value[1].count = d.pending_withdrawals ?? 0
+      if (pendingItems.value[2]) pendingItems.value[2].count = d.active_loans ?? 0
     }
-  } catch {}
-  finally { isLoading.value = false }
+  } catch (err) {
+    console.error('Failed to fetch dashboard stats:', err)
+  }
+
+  try {
+    const txRes = await auth.apiCall<any>('/admin/transactions', 'GET')
+    const rawTx = txRes.data?.data?.data ?? txRes.data?.data ?? txRes.data
+    if (Array.isArray(rawTx)) {
+      recentTransactions.value = rawTx.slice(0, 4).map((tx: any) => ({
+        id: tx.id,
+        type: tx.type,
+        label: `${tx.type === 'deposit' ? 'Deposit' : tx.type === 'withdrawal' ? 'Withdrawal' : 'Transfer'} - ${tx.reference}`,
+        amount: Number(tx.amount).toFixed(2),
+        time: new Date(tx.created_at || tx.createdAt).toLocaleDateString()
+      }))
+    }
+  } catch (err) {
+    console.error('Failed to fetch recent transactions:', err)
+  } finally {
+    isLoading.value = false
+  }
 })
 </script>
 

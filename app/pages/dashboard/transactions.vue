@@ -81,6 +81,7 @@
           v-for="txn in filteredTransactions"
           :key="txn.id"
           class="transaction-row"
+          :class="{ 'txn-pending': txn.status === 'pending' }"
         >
           <div class="txn-icon-wrap" :class="`type-${txn.type}`">
             <Icon :name="typeIcon(txn.type)" class="w-5 h-5" />
@@ -89,11 +90,14 @@
             <span class="txn-merchant">{{ txn.merchant }}</span>
             <span class="txn-date">{{ txn.date }}</span>
           </div>
-          <div class="txn-type-badge" :class="`badge-${txn.type}`">
+          <div v-if="txn.status === 'pending'" class="txn-type-badge badge-pending">
+            ⏳ Pending
+          </div>
+          <div v-else class="txn-type-badge" :class="`badge-${txn.type}`">
             {{ txn.type }}
           </div>
-          <div class="txn-amount" :class="txn.amount >= 0 ? 'positive' : 'negative'">
-            {{ txn.amount >= 0 ? '+' : '' }}{{ formatCurrency(txn.amount) }}
+          <div class="txn-amount" :class="txn.status === 'pending' ? 'pending-amount' : (txn.amount >= 0 ? 'positive' : 'negative')">
+            {{ txn.status === 'pending' ? '' : (txn.amount >= 0 ? '+' : '') }}{{ formatCurrency(txn.amount) }}
           </div>
         </div>
       </div>
@@ -116,7 +120,7 @@ const tabs = [
   { label: 'All', value: 'all' },
   { label: 'Deposits', value: 'deposit' },
   { label: 'Transfers', value: 'transfer' },
-  { label: 'Shopping', value: 'shopping' },
+  { label: 'Pending', value: 'pending' },
   { label: 'Other', value: 'other' }
 ]
 
@@ -126,6 +130,7 @@ interface Transaction {
   date: string
   amount: number
   type: string
+  status?: string
 }
 
 const transactions = ref<Transaction[]>([])
@@ -140,6 +145,7 @@ const typeIcon = (type: string) => {
     shopping: 'lucide:shopping-bag',
     dining: 'lucide:utensils',
     transport: 'lucide:car',
+    debit: 'lucide:receipt',
     other: 'lucide:circle-dot'
   }
   return icons[type] ?? 'lucide:circle-dot'
@@ -148,12 +154,14 @@ const typeIcon = (type: string) => {
 const filteredTransactions = computed(() => {
   let list = transactions.value
 
-  if (activeTab.value !== 'all') {
+  if (activeTab.value === 'pending') {
+    list = list.filter(t => t.status === 'pending')
+  } else if (activeTab.value !== 'all') {
     if (activeTab.value === 'other') {
       const known = ['deposit', 'transfer', 'shopping', 'dining', 'transport']
-      list = list.filter(t => !known.includes(t.type))
+      list = list.filter(t => !known.includes(t.type) && t.status !== 'pending')
     } else {
-      list = list.filter(t => t.type === activeTab.value)
+      list = list.filter(t => t.type === activeTab.value && t.status !== 'pending')
     }
   }
 
@@ -170,26 +178,53 @@ const filteredTransactions = computed(() => {
 })
 
 const totalIn = computed(() =>
-  filteredTransactions.value.filter(t => t.amount > 0).reduce((s, t) => s + t.amount, 0)
+  filteredTransactions.value.filter(t => t.status !== 'pending' && t.amount > 0).reduce((s, t) => s + t.amount, 0)
 )
 const totalOut = computed(() =>
-  filteredTransactions.value.filter(t => t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0)
+  filteredTransactions.value.filter(t => t.status !== 'pending' && t.amount < 0).reduce((s, t) => s + Math.abs(t.amount), 0)
 )
 const net = computed(() => totalIn.value - totalOut.value)
 
 onMounted(async () => {
+  const allTxns: Transaction[] = []
+
+  // 1. Fetch completed transactions log
   const res = await auth.apiCall<any>('/account/transactions', 'GET')
-  if (res.success && res.data?.length) {
-    transactions.value = res.data.map((tx: any) => ({
+  const raw = res.data?.data ?? res.data
+  if (res.success && Array.isArray(raw) && raw.length) {
+    const completed = raw.map((tx: any) => ({
       id: tx.id,
-      merchant: tx.description || 'Transaction',
-      date: new Date(tx.created_at).toLocaleDateString('en-US', {
+      merchant: tx.description || tx.method || 'Transaction',
+      date: new Date(tx.created_at || tx.createdAt).toLocaleDateString('en-US', {
         month: 'short', day: 'numeric', year: 'numeric'
       }),
-      amount: tx.type === 'DEPOSIT' || tx.amount > 0 ? Math.abs(tx.amount) : -Math.abs(tx.amount),
-      type: tx.type?.toLowerCase() || 'other'
+      amount: typeof tx.amount === 'string' ? parseFloat(tx.amount) : Number(tx.amount),
+      type: (tx.type || 'other').toLowerCase(),
+      status: (tx.status || 'completed').toLowerCase()
     }))
+    allTxns.push(...completed)
   }
+
+  // 2. Fetch pending transfers (not yet in transactions log)
+  const tRes = await auth.apiCall<any>('/dashboard/transfers', 'GET')
+  const tRaw = tRes.data?.data ?? tRes.data
+  if (tRes.success && Array.isArray(tRaw)) {
+    const pendingOnly = tRaw
+      .filter((t: any) => (t.status || '').toLowerCase() === 'pending')
+      .map((t: any) => ({
+        id: `pending-${t.id}`,
+        merchant: `Transfer via ${t.method} to ${t.recipient_name || t.recipientName || t.recipient_email || t.recipientEmail || 'Beneficiary'}`,
+        date: new Date(t.created_at || t.createdAt).toLocaleDateString('en-US', {
+          month: 'short', day: 'numeric', year: 'numeric'
+        }),
+        amount: typeof t.amount === 'string' ? parseFloat(t.amount) : Number(t.amount),
+        type: 'transfer',
+        status: 'pending'
+      }))
+    allTxns.unshift(...pendingOnly) // Pending at top
+  }
+
+  transactions.value = allTxns
   loading.value = false
 })
 </script>
@@ -412,6 +447,7 @@ onMounted(async () => {
 .type-shopping { background: rgba(168, 85, 247, 0.1); color: #a855f7; }
 .type-dining { background: rgba(249, 115, 22, 0.1); color: #f97316; }
 .type-transport { background: rgba(14, 165, 233, 0.1); color: #0ea5e9; }
+.type-debit { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 .type-other { background: rgba(100, 116, 139, 0.1); color: #64748b; }
 
 .txn-info {
@@ -450,6 +486,7 @@ onMounted(async () => {
 .badge-shopping { background: rgba(168,85,247,0.1); color: #a855f7; }
 .badge-dining { background: rgba(249,115,22,0.1); color: #f97316; }
 .badge-transport { background: rgba(14,165,233,0.1); color: #0ea5e9; }
+.badge-debit { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
 .badge-other { background: rgba(100,116,139,0.1); color: #64748b; }
 
 .txn-amount {
@@ -460,6 +497,20 @@ onMounted(async () => {
 }
 .txn-amount.positive { color: #16a34a; }
 .txn-amount.negative { color: #dc2626; }
+.txn-amount.pending-amount { color: #d97706; }
+
+/* Pending row */
+.txn-pending {
+  background: rgba(245, 158, 11, 0.04);
+  border-radius: 8px;
+  padding-left: 10px;
+  padding-right: 4px;
+}
+.badge-pending {
+  background: rgba(245, 158, 11, 0.12);
+  color: #d97706;
+  border: 1px solid rgba(245, 158, 11, 0.25);
+}
 
 /* Spin animation */
 @keyframes spin {

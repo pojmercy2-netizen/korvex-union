@@ -60,15 +60,15 @@
         </div>
 
         <div class="topbar-right">
-          <button class="topbar-icon-btn" title="Notifications">
+          <button class="topbar-icon-btn" title="Send Notifications" @click="router.push('/admin/notifications')">
             <Icon name="lucide:bell" :size="18" />
             <span class="notif-dot" />
           </button>
-          <div class="admin-profile-pill">
-            <div class="admin-avatar">A</div>
+          <div class="admin-profile-pill" @click="router.push('/admin/user-management')" title="User Management">
+            <div class="admin-avatar">{{ adminInitial }}</div>
             <div class="admin-info">
-              <div class="admin-name">Admin User</div>
-              <div class="admin-role">Super Admin</div>
+              <div class="admin-name">{{ adminName }}</div>
+              <div class="admin-role">{{ adminRole }}</div>
             </div>
           </div>
         </div>
@@ -125,6 +125,7 @@ const navGroups = [
       { path: '/admin/deposits', label: 'Deposits', icon: 'lucide:download' },
       { path: '/admin/transfers', label: 'Transfers', icon: 'lucide:send' },
       { path: '/admin/loans', label: 'Loan Approvals', icon: 'lucide:hand-coins' },
+      { path: '/admin/wallets', label: 'Wallet Addresses', icon: 'lucide:wallet' },
     ]
   },
   {
@@ -132,6 +133,7 @@ const navGroups = [
     items: [
       { path: '/admin/cards', label: 'Virtual Cards', icon: 'lucide:credit-card' },
       { path: '/admin/notifications', label: 'Notifications', icon: 'lucide:megaphone' },
+      { path: '/admin/settings', label: 'Platform Settings', icon: 'lucide:settings' },
     ]
   },
 ]
@@ -146,6 +148,11 @@ const currentPageLabel = computed(() => {
   return 'Admin'
 })
 
+// Real admin user from localStorage
+const adminName = ref('Admin User')
+const adminRole = ref('Super Admin')
+const adminInitial = computed(() => adminName.value?.[0]?.toUpperCase() || 'A')
+
 onMounted(() => {
   checkMobile()
   window.addEventListener('resize', checkMobile)
@@ -155,6 +162,9 @@ onMounted(() => {
   if (userData && token) {
     try {
       const user = JSON.parse(userData)
+      // Populate real admin name in topbar
+      adminName.value = user.fullName || user.full_name || 'Admin'
+      adminRole.value = user.role === 'superadmin' ? 'Super Admin' : user.role === 'admin' ? 'Admin' : 'Admin'
       const isMockToken = token.startsWith('mock_token_')
       if (!isMockToken && !user.isAdmin && user.role !== 'admin' && user.role !== 'superadmin') {
         router.push('/dashboard')

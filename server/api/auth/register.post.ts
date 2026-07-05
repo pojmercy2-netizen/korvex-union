@@ -6,6 +6,7 @@ import { accounts } from '../../database/schema/accounts'
 import { hashPassword } from '../../utils/hash'
 import { withErrorHandler, conflict } from '../../utils/error'
 import { sendSuccess } from '../../utils/response'
+import { sendEmail, getWelcomeEmailTemplate } from '../../utils/email'
 
 const registerSchema = z.object({
   email: z.string().email(),
@@ -61,6 +62,10 @@ export default withErrorHandler(async (event) => {
       kycStatus: users.kycStatus
     })
 
+    if (!newUser) {
+      throw new Error('Failed to create user record')
+    }
+
     // Create an initial checking account
     const randAcct = Array.from({ length: 10 }, () => Math.floor(Math.random() * 10)).join('')
     await tx.insert(accounts).values({
@@ -74,5 +79,17 @@ export default withErrorHandler(async (event) => {
     return newUser
   })
 
-  return sendSuccess(event, result, 'Registration successful', 211)
+  // Trigger welcome email asynchronously
+  const emailContent = getWelcomeEmailTemplate(result.fullName, result.email)
+  sendEmail({
+    to: result.email,
+    subject: 'Welcome to Korvex Union!',
+    text: emailContent.text,
+    html: emailContent.html
+  }).catch((err) => {
+    console.error('[Registration Email Error]', err)
+  })
+
+  return sendSuccess(event, result, 'Registration successful', 201)
 })
+

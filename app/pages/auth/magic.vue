@@ -63,20 +63,27 @@ onMounted(async () => {
   // Small artificial delay for smooth experience
   await new Promise(resolve => setTimeout(resolve, 1500))
 
+  let backendReachable = false
+
   try {
     // 1. Try to verify token against backend if backend is online
     const res = await auth.apiCall<any>(`/auth/magic-login?token=${token}`, 'POST')
-    if (res.success && res.data?.access_token) {
-      localStorage.setItem('authToken', res.data.access_token)
-      if (res.data.user) {
-        localStorage.setItem('userId', res.data.user.id)
+    backendReachable = true
+
+    // Backend responded — unwrap the data (sendSuccess wraps in { success, data: {...} })
+    const payload = res.data?.data ?? res.data
+
+    if (res.success && payload?.access_token) {
+      localStorage.setItem('authToken', payload.access_token)
+      if (payload.user) {
+        localStorage.setItem('userId', payload.user.id)
         localStorage.setItem('user', JSON.stringify({
-          id: res.data.user.id,
-          email: res.data.user.email,
-          fullName: res.data.user.full_name,
+          id: payload.user.id,
+          email: payload.user.email,
+          fullName: payload.user.fullName || payload.user.full_name,
           accountType: 'Checking',
           status: 'Active',
-          isAdmin: false
+          isAdmin: payload.user.role === 'admin' || payload.user.role === 'superadmin'
         }))
       }
       state.value = 'success'
@@ -85,11 +92,23 @@ onMounted(async () => {
       }, 1500)
       return
     }
+
+    // Backend is online but returned an error (invalid token, banned account, etc.)
+    errorMessage.value = res.error || 'This magic link is invalid or has expired. Please request a new one.'
+    state.value = 'error'
+    return
+
   } catch (err) {
-    console.warn('Backend call failed, trying local storage fallback')
+    console.warn('Backend call threw an exception, trying local storage fallback:', err)
   }
 
-  // 2. Local storage mock fallback
+  // 2. Local storage mock fallback (only reached if backend is completely unreachable)
+  if (backendReachable) {
+    // Backend was reachable but something unexpected happened — don't use mock
+    state.value = 'error'
+    return
+  }
+
   try {
     const mockUsers = JSON.parse(localStorage.getItem('mock_users') || '[]')
     const matchedUser = mockUsers.find((u: any) => u.login_token === token)

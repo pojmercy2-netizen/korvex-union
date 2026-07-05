@@ -63,7 +63,7 @@
       </div>
 
       <div class="footer-bottom">
-        <p>© {{ currentYear }} Korvex Union. All rights reserved.</p>
+        <p>© 2012 – {{ currentYear }} Korvex Union. All rights reserved.</p>
         <div class="footer-bottom-links">
           <NuxtLink to="/register">Terms & Conditions</NuxtLink>
           <NuxtLink to="/register">Privacy Policy</NuxtLink>

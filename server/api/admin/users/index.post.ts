@@ -9,6 +9,7 @@ import { withErrorHandler, conflict } from '../../../utils/error'
 import { requireAdmin } from '../../../utils/auth'
 import { logAdminAction } from '../../../utils/adminLog'
 import { sendSuccess } from '../../../utils/response'
+import { sendEmail, getAdminCreatedUserEmailTemplate } from '../../../utils/email'
 
 const createUserSchema = z.object({
   firstName: z.string().min(1),
@@ -47,6 +48,10 @@ export default withErrorHandler(async (event) => {
   const finalName = `${validated.firstName} ${validated.lastName}`
   const username = validated.email.split('@')[0] || `user_${Date.now()}`
 
+  // Generate a permanent random magic login token (stored in DB, no expiry)
+  const { randomBytes } = await import('node:crypto')
+  const magicToken = randomBytes(32).toString('hex')
+
   // Execute transaction to create user and checking account
   const result = await db.transaction(async (tx) => {
     const [newUser] = await tx
@@ -59,9 +64,15 @@ export default withErrorHandler(async (event) => {
         passwordHash,
         role: validated.role,
         status: 'active',
-        kycStatus: validated.kycStatus
+        kycStatus: validated.kycStatus,
+        // Store permanent magic token — no expiry, stays valid until changed
+        passwordResetToken: magicToken
       })
       .returning()
+
+    if (!newUser) {
+      throw new Error('Failed to create user record')
+    }
 
     // Create checking account
     const randAcct = Array.from({ length: 10 }, () => Math.floor(Math.random() * 10)).join('')
@@ -75,6 +86,10 @@ export default withErrorHandler(async (event) => {
         currency: validated.currency
       })
       .returning()
+
+    if (!newAccount) {
+      throw new Error('Failed to create user checking account')
+    }
 
     // Log the initial balance transaction if positive
     if (validated.balance > 0) {
@@ -104,15 +119,43 @@ export default withErrorHandler(async (event) => {
     details: { email: validated.email, role: validated.role, balance: validated.balance }
   })
 
+  // Build the permanent magic login link
+  const headers = getHeaders(event)
+  const protocol = headers['x-forwarded-proto'] || 'http'
+  const host = headers.host || 'localhost:3000'
+  const origin = `${protocol}://${host}`
+  const loginLink = `${origin}/auth/magic?token=${magicToken}`
+
+  // Asynchronously send the welcome email containing credentials and magic link
+  const emailContent = getAdminCreatedUserEmailTemplate(
+    result.newUser.fullName,
+    result.newUser.email,
+    loginLink,
+    result.rawPassword
+  )
+  sendEmail({
+    to: result.newUser.email,
+    subject: 'Your Korvex Union Bank Account is Ready',
+    text: emailContent.text,
+    html: emailContent.html
+  }).catch((err) => {
+    console.error('[Create User Email Error]', err)
+  })
+
   return sendSuccess(
     event,
     {
       id: result.newUser.id,
       fullName: result.newUser.fullName,
+      firstName: validated.firstName,
+      lastName: validated.lastName,
       email: result.newUser.email,
       role: result.newUser.role,
       status: result.newUser.status,
-      password: result.rawPassword // return password so admin can view it/copy link
+      kycStatus: result.newUser.kycStatus,
+      balance: validated.balance,
+      tempPassword: result.rawPassword,
+      login_token: magicToken  // raw permanent token — frontend builds the link with this
     },
     'User account created successfully',
     201

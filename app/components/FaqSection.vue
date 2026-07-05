@@ -35,10 +35,28 @@
 </template>
 
 <script setup lang="ts">
+import { ref, computed, onMounted } from 'vue'
+
 const openIndex = ref<number | null>(0)
 const toggle = (i: number) => { openIndex.value = openIndex.value === i ? null : i }
 
-const faqs = [
+const supportEmail = ref('support@korvexunion.com')
+
+onMounted(async () => {
+  try {
+    const res = await $fetch<any>('/api/settings')
+    if (res.success && res.data) {
+      const data = res.data?.data ?? res.data
+      if (data.supportEmail) {
+        supportEmail.value = data.supportEmail
+      }
+    }
+  } catch (err) {
+    // Fallback quietly to default
+  }
+})
+
+const faqs = computed(() => [
   {
     question: 'How do I open a Korvex Union account?',
     answer: 'Opening an account takes less than 5 minutes. Simply click "Open an Account", provide your personal details, verify your identity with a government-issued ID, and your account will be ready instantly.'
@@ -65,9 +83,9 @@ const faqs = [
   },
   {
     question: 'How do I contact customer support?',
-    answer: 'Our support team is available 24/7 via live chat in the app, email at support@korvexunion.com, or by calling our helpline. Average response time is under 2 minutes for chat and under 4 hours for email.'
+    answer: `Our support team is available 24/7 via live chat in the app, email at ${supportEmail.value}, or by calling our helpline. Average response time is under 2 minutes for chat and under 4 hours for email.`
   }
-]
+])
 </script>
 
 <style scoped>

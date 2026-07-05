@@ -26,7 +26,7 @@
         <div class="form-group">
           <div class="password-label-wrapper">
             <label class="form-label mb-0" for="password">Password</label>
-            <a href="#" class="auth-link text-xs">Forgot Password?</a>
+            <a href="#" class="auth-link text-xs" @click.prevent="handleForgotPassword">Forgot Password?</a>
           </div>
           <input 
             type="password" 
@@ -67,6 +67,25 @@ const auth = useAuth()
 
 const handleLogin = async () => {
   await auth.login(email.value, password.value)
+}
+
+const handleForgotPassword = async () => {
+  const userEmail = email.value || (import.meta.client ? window.prompt('Please enter your email address to reset your password:') : '')
+  if (!userEmail) return
+
+  auth.isLoading.value = true
+  const res = await auth.apiCall<any>('/auth/forgot-password', 'POST', { email: userEmail })
+  auth.isLoading.value = false
+
+  if (res.success) {
+    if (import.meta.client) {
+      window.alert(res.data?.message || 'A password reset link has been simulated and sent to your email address!')
+    }
+  } else {
+    if (import.meta.client) {
+      window.alert(`Error: ${res.error || 'Failed to send reset request.'}`)
+    }
+  }
 }
 </script>
 

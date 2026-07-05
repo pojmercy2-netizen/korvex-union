@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="admin-page fade-in">
     <div class="page-header">
       <div>
@@ -140,11 +140,26 @@ interface HistoryItem {
   time: string
 }
 
-const sentHistory = ref<HistoryItem[]>([
+const DEFAULT_HISTORY = [
   { id: 1, title: 'System Maintenance Tonight', audience: 'All Users', type: 'warning', priority: 'high', time: '2h ago' },
   { id: 2, title: 'KYC Approved — Welcome!', audience: 'Specific User', type: 'success', priority: 'normal', time: '5h ago' },
   { id: 3, title: 'New Transfer Features', audience: 'All Users', type: 'promo', priority: 'low', time: 'Yesterday' },
-])
+]
+
+const sentHistory = ref<HistoryItem[]>([])
+
+const saveToLocal = () => {
+  if (import.meta.client) {
+    localStorage.setItem('admin_sent_notifications', JSON.stringify(sentHistory.value))
+  }
+}
+
+onMounted(() => {
+  if (import.meta.client) {
+    const saved = localStorage.getItem('admin_sent_notifications')
+    sentHistory.value = saved ? JSON.parse(saved) : DEFAULT_HISTORY
+  }
+})
 
 const getTypeIcon = (type: string) => {
   const map: Record<string, string> = { info: 'lucide:info', success: 'lucide:check-circle', warning: 'lucide:alert-triangle', alert: 'lucide:bell', promo: 'lucide:gift' }
@@ -162,12 +177,11 @@ const handleSend = async () => {
   sending.value = true
   try {
     const res = await auth.apiCall('/admin/notifications/send', 'POST', {
-      audience: form.audience,
-      targetEmail: form.targetEmail,
-      type: form.type,
       title: form.title,
-      message: form.message,
-      priority: form.priority
+      body: form.message,
+      type: form.type,
+      audience: form.audience,
+      userId: form.audience === 'specific' ? form.targetEmail : undefined
     })
     sentHistory.value.unshift({
       id: Date.now(),
@@ -177,6 +191,7 @@ const handleSend = async () => {
       priority: form.priority,
       time: 'Just now'
     })
+    saveToLocal()
     form.title = ''
     form.message = ''
     form.targetEmail = ''
@@ -190,6 +205,7 @@ const handleSend = async () => {
       priority: form.priority,
       time: 'Just now'
     })
+    saveToLocal()
     form.title = ''
     form.message = ''
     showToast('Notification sent (mock mode).')

@@ -8,14 +8,11 @@
 </template>
 
 <style>
-*, *::before, *::after {
-  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.15s ease;
+body, nav, header, footer, aside, .dashboard-card, .btn, .nav-link, .sidebar-link, .bottom-nav-item, .payment-method-card {
+  transition: background-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), border-color 0.25s cubic-bezier(0.4, 0, 0.2, 1), color 0.2s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 }
 /* Prevent transition on images and icons */
-img, svg, .theme-toggle-thumb {
+img, svg {
   transition: none !important;
-}
-.theme-toggle-thumb {
-  transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.3s ease !important;
 }
 </style>

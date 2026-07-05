@@ -1,37 +1,10 @@
 <template>
   <div class="dashboard-overview">
-    <!-- Welcome Greeting & Language Header Row -->
+    <!-- Welcome Greeting -->
     <div class="welcome-header-row">
       <div class="welcome-section-body">
         <h1>Welcome back, {{ firstName }}</h1>
         <p>Here's an overview of your account activity.</p>
-      </div>
-
-      <!-- Language Selector Widget -->
-      <div class="header-lang-widget" @click="toggleLangMenu" ref="langMenuRef">
-        <div class="lang-widget-content">
-          <img :src="currentFlag" alt="Flag" class="flag-icon" />
-          <span class="lang-text">
-            {{ selectedLang }}
-            <Icon :name="isLangMenuOpen ? 'lucide:chevron-up' : 'lucide:chevron-down'" class="w-4 h-4 text-slate-500" />
-          </span>
-        </div>
-        
-        <!-- Language Dropdown Menu -->
-        <div v-if="isLangMenuOpen" class="lang-dropup-custom">
-          <button class="lang-option-custom" @click.stop="selectLang('en')">
-            <img src="https://flagcdn.com/w20/us.png" alt="US Flag" class="w-5 h-3.5 object-cover" />
-            <span>English (EN)</span>
-          </button>
-          <button class="lang-option-custom" @click.stop="selectLang('es')">
-            <img src="https://flagcdn.com/w20/es.png" alt="Spain Flag" class="w-5 h-3.5 object-cover" />
-            <span>Español (ES)</span>
-          </button>
-          <button class="lang-option-custom" @click.stop="selectLang('fr')">
-            <img src="https://flagcdn.com/w20/fr.png" alt="France Flag" class="w-5 h-3.5 object-cover" />
-            <span>Français (FR)</span>
-          </button>
-        </div>
       </div>
     </div>
 
@@ -98,7 +71,7 @@
         <div class="dashboard-card recent-transactions">
           <div class="card-header-main">
             <h3>Recent Transactions</h3>
-            <a href="#" class="view-all" @click.prevent="alert('Opening full transaction history...')">
+            <a href="#" class="view-all" @click.prevent="navigateTo('/dashboard/transactions')">
               View all
             </a>
           </div>
@@ -131,7 +104,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { onClickOutside } from '@vueuse/core'
+
 
 definePageMeta({
   layout: 'dashboard'
@@ -141,7 +114,8 @@ useHead({
   title: 'Dashboard Overview | Korvex Union'
 })
 
-const checkingBalance = ref(4287.19) // default fallback
+const checkingBalance = ref(0)
+const allAccountsBalance = ref(0) // sum of all real accounts
 const transactions = ref<any[]>([])
 
 const showPhysicalModal = ref(false)
@@ -149,38 +123,14 @@ const physicalCardLoading = ref(false)
 
 const auth = useAuth()
 
-// Calculate dynamic total balance (Checking + Savings default)
-const totalBalance = computed(() => {
-  return checkingBalance.value + 12560.43
-})
+// True total = sum of all accounts fetched from API
+const totalBalance = computed(() => allAccountsBalance.value)
 
 // User info for greeting
 const fullName = ref('side side')
 const firstName = computed(() => fullName.value.split(' ')[0])
 
-// Language switcher ref and state
-const langMenuRef = ref(null)
-const isLangMenuOpen = ref(false)
-const selectedLang = ref('EN')
 
-const toggleLangMenu = () => {
-  isLangMenuOpen.value = !isLangMenuOpen.value
-}
-
-const selectLang = (lang: string) => {
-  selectedLang.value = lang.toUpperCase()
-  isLangMenuOpen.value = false
-}
-
-const currentFlag = computed(() => {
-  if (selectedLang.value === 'ES') return 'https://flagcdn.com/w40/es.png'
-  if (selectedLang.value === 'FR') return 'https://flagcdn.com/w40/fr.png'
-  return 'https://flagcdn.com/w40/us.png'
-})
-
-onClickOutside(langMenuRef, () => {
-  isLangMenuOpen.value = false
-})
 
 const formatCurrency = (val: number) => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val)
@@ -206,26 +156,38 @@ const dashboardMethods = [
 
 const loadAccountData = async () => {
   try {
-    const balanceRes = await auth.apiCall<any>('/account/balance', 'GET')
-    if (balanceRes.success && balanceRes.data) {
-      checkingBalance.value = balanceRes.data.balance || 0
+    // Fetch all accounts to compute true total balance
+    const accountsRes = await auth.apiCall<any>('/dashboard/accounts', 'GET')
+    if (accountsRes.success && accountsRes.data) {
+      const accounts: any[] = accountsRes.data?.data ?? accountsRes.data ?? []
+      const total = accounts.reduce((sum: number, a: any) => sum + parseFloat(a.balance || 0), 0)
+      allAccountsBalance.value = total
+      // Checking account balance (first checking account)
+      const checking = accounts.find((a: any) => a.accountType === 'checking')
+      checkingBalance.value = checking ? parseFloat(checking.balance || 0) : 0
+    } else {
+      allAccountsBalance.value = 0
+      checkingBalance.value = 0
     }
 
+    // Fetch recent transactions
     const txRes = await auth.apiCall<any>('/account/transactions', 'GET')
     if (txRes.success && txRes.data) {
-      const formatted = txRes.data.map((tx: any) => ({
+      const txList: any[] = txRes.data?.data ?? txRes.data ?? []
+      transactions.value = txList.map((tx: any) => ({
         id: tx.id,
         merchant: tx.description || 'Transaction',
         date: new Date(tx.created_at).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-        amount: tx.type === 'DEPOSIT' || tx.amount > 0 ? Math.abs(tx.amount) : -Math.abs(tx.amount),
+        amount: parseFloat(tx.amount),
         type: tx.type?.toLowerCase() || 'transfer'
       }))
-      transactions.value = formatted.length > 0 ? formatted : []
     } else {
       transactions.value = []
     }
-  } catch (error) {
-    console.error('Failed to load account data:', error)
+  } catch (err) {
+    console.error('Failed to load account data:', err)
+    allAccountsBalance.value = 0
+    checkingBalance.value = 0
     transactions.value = []
   }
 }
@@ -258,10 +220,9 @@ const handlePhysicalCardSubmit = (formData: any) => {
   gap: 24px;
 }
 
-/* Header layout with language selector inline */
+/* Welcome header */
 .welcome-header-row {
   display: flex;
-  justify-content: space-between;
   align-items: center;
   margin-top: 8px;
 }
@@ -285,94 +246,6 @@ const handlePhysicalCardSubmit = (formData: any) => {
 }
 .dark .welcome-section-body p {
   color: #94a3b8;
-}
-
-/* Language Switcher style */
-.header-lang-widget {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  padding: 8px 12px;
-  cursor: pointer;
-  position: relative;
-  transition: all 0.2s ease;
-  user-select: none;
-}
-.dark .header-lang-widget {
-  background: var(--color-background-dark-card);
-  border-color: var(--color-border-dark);
-}
-.header-lang-widget:hover {
-  border-color: rgba(0, 102, 255, 0.2);
-}
-.lang-widget-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-.lang-text {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--color-text-main);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-.dark .lang-text {
-  color: #f1f5f9;
-}
-.flag-icon {
-  width: 20px;
-  height: 14px;
-  object-fit: cover;
-  border-radius: 2px;
-  box-shadow: 0 1px 2px rgba(0,0,0,0.1);
-}
-
-.lang-dropup-custom {
-  position: absolute;
-  top: calc(100% + 6px);
-  right: 0;
-  width: 160px;
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: 12px;
-  box-shadow: 0 10px 25px rgba(0,0,0,0.08);
-  padding: 6px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  z-index: 100;
-}
-.dark .lang-dropup-custom {
-  background: #0f172a;
-  border-color: var(--color-border-dark);
-  box-shadow: 0 10px 25px rgba(0,0,0,0.3);
-}
-.lang-option-custom {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 10px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--color-text-main);
-  border-radius: 8px;
-  transition: background-color 0.2s;
-  width: 100%;
-  text-align: left;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-}
-.dark .lang-option-custom {
-  color: #f1f5f9;
-}
-.lang-option-custom:hover {
-  background-color: var(--color-background-subtle);
-}
-.dark .lang-option-custom:hover {
-  background-color: rgba(255,255,255,0.05);
 }
 
 /* Hero layout grid */

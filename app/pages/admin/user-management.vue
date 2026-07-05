@@ -39,7 +39,7 @@
             <tr v-for="user in filteredUsers" :key="user.id">
               <td>
                 <div class="user-cell">
-                  <div class="user-avatar">{{ user.full_name[0] }}</div>
+                  <div class="user-avatar">{{ (user.full_name || user.email || '?')[0] }}</div>
                   <div>
                     <div class="user-name-text">{{ user.full_name }}</div>
                     <div class="user-id">ID: {{ user.id }}</div>
@@ -319,7 +319,8 @@ const fetchUsers = async () => {
   loading.value = true
   try {
     const res = await auth.apiCall<any>('/admin/users', 'GET')
-    users.value = (res.success && res.data?.data) ? res.data.data : DEFAULT_USERS
+    const raw = res.data?.data?.data ?? res.data?.data ?? res.data
+    users.value = Array.isArray(raw) ? raw : DEFAULT_USERS
   } catch { users.value = DEFAULT_USERS }
   finally  { loading.value = false }
 }
@@ -328,7 +329,8 @@ const loadUserTransactions = async (userId: string) => {
   txLoading.value = true
   try {
     const res = await auth.apiCall<any>(`/admin/users/${userId}/transactions`, 'GET')
-    userTransactions.value = (res.success && res.data?.data) ? res.data.data : DEFAULT_TRANSACTIONS.filter(t => t.user_id === userId)
+    const raw = res.data?.data?.data ?? res.data?.data ?? res.data
+    userTransactions.value = Array.isArray(raw) ? raw : DEFAULT_TRANSACTIONS.filter(t => t.user_id === userId)
   } catch { userTransactions.value = DEFAULT_TRANSACTIONS.filter(t => t.user_id === userId) }
   finally  { txLoading.value = false }
 }
@@ -406,7 +408,18 @@ const handleReverseTx = async (txId: string) => {
   } catch { showToast('Reversal failed.', 'error') }
 }
 
-onMounted(() => fetchUsers())
+onMounted(async () => {
+  await fetchUsers()
+  if (import.meta.client) {
+    const route = useRoute()
+    if (route.query.id) {
+      const targetUser = users.value.find(u => u.id === route.query.id)
+      if (targetUser) {
+        openModal('transactions', targetUser)
+      }
+    }
+  }
+})
 </script>
 
 <style scoped>

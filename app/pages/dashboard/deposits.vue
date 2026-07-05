@@ -135,7 +135,7 @@ useHead({
 })
 
 interface Deposit {
-  id: number
+  id: string
   method: string
   status: string
   date: string
@@ -148,20 +148,21 @@ const isCryptoStep2 = ref(false)
 const selectedCoin = ref('BTC')
 const receiptFileName = ref('')
 const cryptoAmount = ref<number | ''>('')
+const auth = useAuth()
 
-const coins = [
+const coins = ref([
   { id: 'BTC', name: 'Bitcoin (BTC)', address: 'bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh', network: 'Bitcoin' },
   { id: 'ETH', name: 'Ethereum (ETH)', address: '0x71C7656EC7ab88b098defB751B7401B5f6d8976F', network: 'ERC20 (Ethereum)' },
-  { id: 'USDT', name: 'Tether (USDT)', address: 'TR7NHqju6dC8GyqKz2763z54X5157_mock', network: 'TRC20 (Tron)' }
-]
+  { id: 'USDT', name: 'Tether (USDT)', address: 'TR7NHqju6dC8GyqKz2763z54X5157mock', network: 'TRC20 (Tron)' }
+])
 
 const currentCoinAddress = computed(() => {
-  const coin = coins.find(c => c.id === selectedCoin.value)
+  const coin = coins.value.find(c => c.id === selectedCoin.value)
   return coin ? coin.address : ''
 })
 
 const currentCoinNetwork = computed(() => {
-  const coin = coins.find(c => c.id === selectedCoin.value)
+  const coin = coins.value.find(c => c.id === selectedCoin.value)
   return coin ? coin.network : ''
 })
 
@@ -172,11 +173,44 @@ const resetForm = () => {
   receiptFileName.value = ''
 }
 
-onMounted(() => {
-  if (import.meta.client) {
-    const data = localStorage.getItem('recent_deposits')
-    recentDeposits.value = data ? JSON.parse(data) : []
+const loadWalletAddresses = async () => {
+  try {
+    const res = await auth.apiCall<any>('/dashboard/wallets', 'GET')
+    if (res.success && res.data) {
+      const data: any[] = res.data?.data ?? res.data ?? []
+      if (data.length > 0) {
+        coins.value = data.map((w: any) => ({
+          id: w.coin,
+          name: w.label,
+          address: w.address,
+          network: w.network
+        }))
+      }
+    }
+  } catch {
+    // Silently fall back to default values
   }
+}
+
+const loadDeposits = async () => {
+  const res = await auth.apiCall<any>('/dashboard/deposits', 'GET')
+  if (res.success && res.data) {
+    const list: any[] = res.data?.data ?? res.data ?? []
+    recentDeposits.value = list.map((d: any) => ({
+      id: d.id,
+      method: d.method,
+      status: d.status,
+      date: new Date(d.created_at || d.createdAt).toLocaleDateString('en-US', {
+        month: 'short',
+        day: 'numeric'
+      })
+    }))
+  }
+}
+
+onMounted(() => {
+  loadWalletAddresses()
+  loadDeposits()
 })
 
 const methods = [
@@ -185,15 +219,19 @@ const methods = [
   { id: 'PayPal', icon: 'i-lucide-credit-card', color: 'text-blue-700' }
 ]
 
-const alert = (msg: string) => {
+const alertPrompt = (msg: string) => {
   if (import.meta.client) {
     window.alert(msg)
   }
 }
 
-const handleDeposit = () => {
+const selectMethod = (id: string) => {
+  selectedMethod.value = id
+}
+
+const proceedToStep2 = () => {
   if (!selectedMethod.value) {
-    alert('Please select a deposit method first.')
+    alertPrompt('Please select a deposit method first.')
     return
   }
 
@@ -211,52 +249,51 @@ const handleDeposit = () => {
 const copyText = (text: string) => {
   if (import.meta.client && navigator.clipboard) {
     navigator.clipboard.writeText(text)
-    alert('Wallet address copied to clipboard!')
+    alertPrompt('Wallet address copied to clipboard!')
   }
 }
 
 const handleReceiptChange = (e: Event) => {
   const target = e.target as HTMLInputElement
   if (target.files && target.files.length > 0) {
-    receiptFileName.value = target.files[0].name
+    const file = target.files[0]
+    if (file) receiptFileName.value = file.name
   } else {
     receiptFileName.value = ''
   }
 }
 
-const handleCryptoSubmit = () => {
+const handleCryptoSubmit = async () => {
   if (!cryptoAmount.value || cryptoAmount.value <= 0) {
-    alert('Please enter a valid amount.')
+    alertPrompt('Please enter a valid amount.')
     return
   }
   if (!receiptFileName.value) {
-    alert('Please upload your receipt image.')
+    alertPrompt('Please upload your receipt image.')
     return
   }
 
-  const newDeposit: Deposit = {
-    id: Date.now(),
+  const res = await auth.apiCall<any>('/dashboard/deposits', 'POST', {
     method: `Crypto (${selectedCoin.value})`,
-    status: 'Pending Review',
-    date: 'Today'
-  }
+    amount: Number(cryptoAmount.value),
+    coin: selectedCoin.value,
+    walletAddress: currentCoinAddress.value,
+    note: `Crypto Deposit via ${selectedCoin.value}`
+  })
 
-  recentDeposits.value = [newDeposit, ...recentDeposits.value]
-  if (import.meta.client) {
-    localStorage.setItem('recent_deposits', JSON.stringify(recentDeposits.value))
+  if (res.success) {
+    await loadDeposits()
+    alertPrompt(`✓ Crypto deposit of $${Number(cryptoAmount.value).toFixed(2)} submitted for review!\n\nTransaction verification is in progress.`)
+    isCryptoStep2.value = false
+    selectedCoin.value = 'BTC'
+    receiptFileName.value = ''
+    cryptoAmount.value = ''
+  } else {
+    alertPrompt(`Error: ${res.error || 'Failed to submit deposit.'}`)
   }
-
-  alert(`✓ Crypto deposit of $${Number(cryptoAmount.value).toFixed(2)} submitted for review!\n\nTransaction verification is in progress.`)
-  
-  // reset
-  isCryptoStep2.value = false
-  selectedCoin.value = 'BTC'
-  receiptFileName.value = ''
-  cryptoAmount.value = ''
-  selectedMethod.value = ''
 }
 
-
+const handleDeposit = proceedToStep2
 </script>
 
 <style scoped>

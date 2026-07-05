@@ -67,6 +67,9 @@ export default withErrorHandler(async (event) => {
           currency: 'USD'
         })
         .returning()
+      if (!newAcct) {
+        throw new Error('Failed to create checking account')
+      }
       checkingId = newAcct.id
     } else {
       // Add balance

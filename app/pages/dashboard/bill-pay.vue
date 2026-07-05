@@ -135,7 +135,11 @@
           <div class="card-header-main">
             <h3>Payment History</h3>
           </div>
-          <div class="transaction-list">
+          <div v-if="paymentHistory.length === 0" class="empty-state">
+            <Icon name="lucide:receipt" class="w-8 h-8 text-slate-400 dark:text-slate-600 mb-2" />
+            <p>No bill payments made yet.</p>
+          </div>
+          <div v-else class="transaction-list">
             <div v-for="h in paymentHistory" :key="h.id" class="transaction-item">
               <div class="transaction-info">
                 <div class="transaction-icon" :style="{ background: h.bg }">
@@ -159,11 +163,12 @@
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
 
 definePageMeta({ layout: 'dashboard' })
 useHead({ title: 'Bill Pay | Korvex Union' })
 
+const auth = useAuth()
 const amount = ref<number | ''>('')
 const selectedPayee = ref('')
 const deliveryDate = ref(new Date().toISOString().split('T')[0])
@@ -181,38 +186,60 @@ const billers = [
   { id: 'insurance', name: 'State Farm', category: 'Insurance', icon: 'lucide:shield', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
   { id: 'mortgage', name: 'Chase Mortgage', category: 'Housing', icon: 'lucide:home', color: '#8b5cf6', bg: 'rgba(139,92,246,0.12)' },
 ]
+const paymentHistory = ref<any[]>([])
 
+const loadHistory = async () => {
+  const res = await auth.apiCall<any>('/dashboard/bill-pay', 'GET')
+  if (res.success && res.data) {
+    const data = res.data?.data ?? res.data
+    paymentHistory.value = Array.isArray(data) ? data.map((h: any) => {
+      const biller = billers.find(b => b.name === h.name || b.id === h.name)
+      return {
+        id: h.id,
+        name: h.name,
+        date: h.date,
+        amount: h.amount,
+        icon: biller?.icon || 'lucide:file-text',
+        color: biller?.color || '#64748b',
+        bg: biller?.bg || 'rgba(100,116,139,0.12)'
+      }
+    }) : []
+  }
+}
 
-const paymentHistory = ref([
-  { id: 1, name: 'City Electric Co.', date: 'Jun 5, 2026', amount: '118.40', icon: 'lucide:zap', color: '#f59e0b', bg: 'rgba(245,158,11,0.12)' },
-  { id: 2, name: 'Comcast Xfinity', date: 'Jun 8, 2026', amount: '79.99', icon: 'lucide:wifi', color: '#6366f1', bg: 'rgba(99,102,241,0.12)' },
-  { id: 3, name: 'Municipal Water', date: 'Jun 10, 2026', amount: '42.00', icon: 'lucide:droplets', color: '#3b82f6', bg: 'rgba(59,130,246,0.12)' },
-  { id: 4, name: 'AT&T Mobile', date: 'Jun 12, 2026', amount: '55.00', icon: 'lucide:smartphone', color: '#10b981', bg: 'rgba(16,185,129,0.12)' },
-  { id: 5, name: 'State Farm', date: 'Jun 15, 2026', amount: '210.00', icon: 'lucide:shield', color: '#ef4444', bg: 'rgba(239,68,68,0.12)' },
-])
+onMounted(() => {
+  loadHistory()
+})
 
 const handlePay = async () => {
   if (!amount.value || !selectedPayee.value) return
   isSubmitting.value = true
-  await new Promise(r => setTimeout(r, 1200))
 
   const biller = billers.find(b => b.id === selectedPayee.value)
-  paymentHistory.value.unshift({
-    id: Date.now(),
-    name: biller?.name || selectedPayee.value,
-    date: new Date(deliveryDate.value).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
-    amount: Number(amount.value).toFixed(2),
-    icon: biller?.icon || 'lucide:file-text',
-    color: biller?.color || '#64748b',
-    bg: biller?.bg || 'rgba(100,116,139,0.12)',
+  const billerName = biller?.name || selectedPayee.value
+
+  const res = await auth.apiCall<any>('/dashboard/bill-pay', 'POST', {
+    payeeId: selectedPayee.value,
+    payeeName: billerName,
+    amount: Number(amount.value),
+    fromAccount: fromAccount.value,
+    memo: memo.value
   })
 
-  successMsg.value = `Payment of $${Number(amount.value).toFixed(2)} to ${biller?.name} processed for ${deliveryDate.value}.`
-  amount.value = ''
-  selectedPayee.value = ''
-  memo.value = ''
+  if (res.success) {
+    await loadHistory()
+    successMsg.value = `Payment of $${Number(amount.value).toFixed(2)} to ${billerName} processed for ${deliveryDate.value}.`
+    amount.value = ''
+    selectedPayee.value = ''
+    memo.value = ''
+    setTimeout(() => { successMsg.value = '' }, 5000)
+  } else {
+    if (import.meta.client) {
+      window.alert(`Error: ${res.error || 'Failed to process bill payment'}`)
+    }
+  }
+
   isSubmitting.value = false
-  setTimeout(() => { successMsg.value = '' }, 5000)
 }
 </script>
 
@@ -508,5 +535,19 @@ const handlePay = async () => {
 @keyframes spin {
   from { transform: rotate(0deg); }
   to { transform: rotate(360deg); }
+}
+
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--color-text-muted);
+}
+.empty-state p {
+  font-size: 14px;
+  margin: 0;
 }
 </style>

@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="admin-page fade-in">
     <div class="page-header">
       <div>
@@ -19,6 +19,9 @@
       <div class="filter-tabs">
         <button v-for="tab in tabs" :key="tab" class="filter-tab" :class="{ active: activeTab === tab }" @click="activeTab = tab">{{ tab }}</button>
       </div>
+      <button class="refresh-btn" @click="fetchTransfers" :disabled="loading" title="Refresh">
+        <Icon name="lucide:refresh-cw" :size="15" :class="{ 'spin-icon': loading }" />
+      </button>
     </div>
 
     <div class="admin-card">
@@ -40,7 +43,7 @@
             <tr v-for="tx in filteredTransfers" :key="tx.id">
               <td>
                 <div class="user-cell">
-                  <div class="user-avatar">{{ tx.senderName[0] }}</div>
+                  <div class="user-avatar">{{ (tx.senderName || '?')[0] }}</div>
                   <div>
                     <div class="user-name-text">{{ tx.senderName }}</div>
                     <div class="user-email-text">{{ tx.senderEmail }}</div>
@@ -74,6 +77,9 @@
             </tr>
           </tbody>
         </table>
+      </div>
+      <div v-if="filteredTransfers.length > 0" class="table-footer">
+        <span class="table-count">{{ filteredTransfers.length }} of {{ transfers.length }} transfers</span>
       </div>
     </div>
 
@@ -158,14 +164,31 @@ const handleReject = async (tx: Transfer) => {
   finally { actionLoading.value = false }
 }
 
-onMounted(async () => {
+const fetchTransfers = async () => {
+  loading.value = true
   try {
     const res = await auth.apiCall<any>('/admin/transfers', 'GET')
-    if (res.success && res.data?.data) transfers.value = res.data.data
-    else transfers.value = MOCK
+    const raw = res.data?.data?.data ?? res.data?.data ?? res.data
+    if (Array.isArray(raw) && raw.length > 0) {
+      transfers.value = raw.map((t: any) => ({
+        id: t.id,
+        senderName: t.userName || t.senderName || 'Unknown',
+        senderEmail: t.userEmail || t.senderEmail || '—',
+        recipientInfo: t.recipientName || t.recipientEmail || t.recipientInfo || '—',
+        reference: t.reference || `TXF-${t.id?.slice(0, 6)?.toUpperCase() || 'N/A'}`,
+        method: (t.method || 'bank').toLowerCase(),
+        amount: typeof t.amount === 'string' ? parseFloat(t.amount) : (t.amount || 0),
+        status: (t.status || 'PENDING').toUpperCase(),
+        created_at: t.created_at || t.createdAt || new Date().toISOString()
+      }))
+    } else {
+      transfers.value = MOCK
+    }
   } catch { transfers.value = MOCK }
   finally { loading.value = false }
-})
+}
+
+onMounted(() => fetchTransfers())
 </script>
 
 <style scoped>
@@ -188,14 +211,19 @@ onMounted(async () => {
 .filter-tabs{display:flex;gap:4px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);border-radius:10px;padding:4px}
 .filter-tab{padding:6px 14px;border-radius:7px;font-size:13px;font-weight:500;color:rgba(255,255,255,0.45);cursor:pointer;border:none;background:none;font-family:inherit;transition:all 0.18s}
 .filter-tab.active{background:rgba(99,102,241,0.2);color:#a5b4fc}
-.admin-card{background:rgba(13,20,36,0.9);border:1px solid rgba(255,255,255,0.07);border-radius:14px;padding:20px}
+.admin-card{background:rgba(13,20,36,0.9);border:1px solid rgba(255,255,255,0.07);border-radius:14px;overflow:hidden}
 .admin-loading{padding:40px;text-align:center;color:#94a3b8;display:flex;align-items:center;justify-content:center;gap:10px}
+.refresh-btn { width:36px; height:36px; display:flex; align-items:center; justify-content:center; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:9px; color:rgba(255,255,255,0.45); cursor:pointer; transition:all 0.18s; flex-shrink:0; }
+.refresh-btn:hover { background:rgba(255,255,255,0.08); color: #fff; }
 .admin-table-container{overflow-x:auto}
 .admin-table{width:100%;border-collapse:collapse;text-align:left}
 .admin-table th{padding:12px 14px;color:rgba(255,255,255,0.35);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:0.07em;border-bottom:1px solid rgba(255,255,255,0.07)}
 .admin-table td{padding:14px;color:#cbd5e1;border-bottom:1px solid rgba(255,255,255,0.04);vertical-align:middle;font-size:13.5px}
+.admin-table tr:last-child td{border-bottom:none}
 .admin-table tr:hover td{background:rgba(255,255,255,0.02)}
 .empty-row{text-align:center;color:rgba(255,255,255,0.25);padding:40px!important}
+.table-footer{padding:12px 16px;border-top:1px solid rgba(255,255,255,0.06);display:flex;align-items:center;justify-content:flex-end}
+.table-count{font-size:12px;color:rgba(255,255,255,0.3)}
 .user-cell{display:flex;align-items:center;gap:10px}
 .user-avatar{width:32px;height:32px;border-radius:50%;background:linear-gradient(135deg,#6366f1,#8b5cf6);color:#fff;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0}
 .user-name-text{font-size:13.5px;font-weight:600;color:#f1f5f9}

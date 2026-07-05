@@ -22,7 +22,7 @@
         <AccountListItem
           title="High-Yield Savings"
           subtitle="•••• 8832"
-          balance="$45,200.50"
+          :balance="formatCurrency(savingsBalance)"
           type="Available balance"
           icon="i-lucide-wallet-cards"
           theme="blue"
@@ -39,7 +39,7 @@
         <AccountListItem
           title="Korvex Union Rewards Visa"
           subtitle="•••• 9012"
-          balance="$1,234.56"
+          balance="$0.00"
           type="Outstanding balance"
           icon="i-lucide-credit-card"
           theme="dark"
@@ -48,7 +48,7 @@
         <AccountListItem
           title="30-Year Fixed Mortgage"
           subtitle="•••• 3456"
-          balance="$180,245.67"
+          balance="$0.00"
           type="Remaining principal"
           icon="i-lucide-home"
           theme="blue"
@@ -70,7 +70,8 @@ useHead({
   title: 'Your Accounts | Korvex Union'
 })
 
-const checkingBalance = ref(12450.00)
+const checkingBalance = ref(0)
+const savingsBalance = ref(0)
 const auth = useAuth()
 
 const formatCurrency = (val: number) => {
@@ -78,15 +79,19 @@ const formatCurrency = (val: number) => {
 }
 
 const handleAction = (acct: string) => {
-  if (import.meta.client) {
-    window.alert(`Managing ${acct} Account details...`)
-  }
+  navigateTo('/dashboard/transactions')
 }
 
 onMounted(async () => {
-  const balanceRes = await auth.apiCall<any>('/account/balance', 'GET')
-  if (balanceRes.success && balanceRes.data) {
-    checkingBalance.value = balanceRes.data.balance || 0
+  const accountsRes = await auth.apiCall<any>('/dashboard/accounts', 'GET')
+  if (accountsRes.success && accountsRes.data) {
+    const accountsList: any[] = accountsRes.data?.data ?? accountsRes.data ?? []
+    
+    const checking = accountsList.find((a: any) => a.accountType === 'checking')
+    checkingBalance.value = checking ? parseFloat(checking.balance || 0) : 0
+
+    const savings = accountsList.find((a: any) => a.accountType === 'savings')
+    savingsBalance.value = savings ? parseFloat(savings.balance || 0) : 0
   }
 })
 </script>

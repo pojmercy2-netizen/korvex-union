@@ -14,7 +14,7 @@
               <Icon name="lucide:award" :size="18" class="pill-icon" />
             </div>
             <div>
-              <p class="pill-value">Est. 2018</p>
+              <p class="pill-value">Est. 2012</p>
               <p class="pill-label">Trusted for 6+ years</p>
             </div>
           </div>
@@ -25,7 +25,7 @@
           <span class="about-eyebrow">About Korvex Union</span>
           <h2 class="about-title">Banking built around <span class="text-gradient">your life</span></h2>
           <p class="about-desc">
-            Korvex Union was founded in 2018 with a single mission: to make premium banking accessible to everyone, everywhere. We believe that financial empowerment shouldn't be reserved for the privileged few — it should be a right.
+            Korvex Union was founded in 2012 with a single mission: to make premium banking accessible to everyone, everywhere. We believe that financial empowerment shouldn't be reserved for the privileged few — it should be a right.
           </p>
           <p class="about-desc">
             Our team of over 1,200 dedicated professionals operates across 40+ countries, combining world-class technology with a genuine passion for customer wellbeing. We are fully licensed, regulated, and FDIC insured.

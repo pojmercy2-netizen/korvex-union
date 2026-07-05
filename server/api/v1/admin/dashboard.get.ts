@@ -1,2 +1,4 @@
-import dashboardHandler from '../../admin/dashboard.get'
-export default dashboardHandler
+export default defineEventHandler(async (event) => {
+  const mod = await import('../../admin/dashboard.get')
+  return (mod.default as any)(event)
+})

@@ -312,8 +312,33 @@ useHead({ title: 'Transfer & Pay | Korvex Union' })
 const auth = useAuth()
 
 // Balance
-const checkingBalance = ref(4287.19)
-const totalBalance = computed(() => checkingBalance.value + 12560.43)
+const checkingBalance = ref(0)
+const savingsBalance = ref(0)
+const totalBalance = computed(() => checkingBalance.value + savingsBalance.value)
+
+onMounted(async () => {
+  // Load recent transfers from localStorage
+  const saved = localStorage.getItem('recentTransfers')
+  if (saved) {
+    try {
+      recentTransfers.value = JSON.parse(saved)
+    } catch {
+      recentTransfers.value = []
+    }
+  }
+
+  // Load real balance details from API
+  const accountsRes = await auth.apiCall<any>('/dashboard/accounts', 'GET')
+  if (accountsRes.success && accountsRes.data) {
+    const accountsList: any[] = accountsRes.data?.data ?? accountsRes.data ?? []
+    
+    const checking = accountsList.find((a: any) => a.accountType === 'checking')
+    checkingBalance.value = checking ? parseFloat(checking.balance || 0) : 0
+
+    const savings = accountsList.find((a: any) => a.accountType === 'savings')
+    savingsBalance.value = savings ? parseFloat(savings.balance || 0) : 0
+  }
+})
 
 // Steps
 const step = ref(1)
@@ -414,24 +439,75 @@ const confirmPinAndTransfer = () => {
   executeTransferSubmission()
 }
 
-const executeTransferSubmission = () => {
+const executeTransferSubmission = async () => {
   isLoading.value = true
-  setTimeout(() => {
-    const entry = {
-      id: Date.now().toString(),
+  message.value = ''
+
+  try {
+    const pin = import.meta.client ? (localStorage.getItem('transfer_pin') || '') : ''
+
+    const payload: Record<string, any> = {
       method: selectedMethod.value,
       amount: Number(form.value.amount),
-      date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+      pin,
+      note: form.value.note || ''
     }
-    recentTransfers.value = [entry, ...recentTransfers.value]
-    if (import.meta.client) localStorage.setItem('recent_transfers', JSON.stringify(recentTransfers.value))
 
-    messageType.value = 'success'
-    message.value = `✓ Transfer of $${Number(form.value.amount).toFixed(2)} via ${selectedMethod.value} initiated successfully!`
+    // Attach method-specific fields
+    if (form.value.email)         payload.email = form.value.email
+    if (form.value.phone)         payload.phone = form.value.phone
+    if (form.value.walletAddress) payload.walletAddress = form.value.walletAddress
+    if (form.value.coin)          payload.coin = form.value.coin
+    if (form.value.recipientName) payload.recipientName = form.value.recipientName
+    if (form.value.country)       payload.country = form.value.country
+    if (form.value.currency)      payload.currency = form.value.currency
+
+    const res = await auth.apiCall<any>('/dashboard/transfers', 'POST', payload)
+
+    if (res.success) {
+      // Add to recent transfers sidebar with pending status
+      const entry = {
+        id: Date.now().toString(),
+        method: selectedMethod.value,
+        amount: Number(form.value.amount),
+        date: new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' }),
+        status: 'pending'
+      }
+      recentTransfers.value = [entry, ...recentTransfers.value]
+      if (import.meta.client) localStorage.setItem('recent_transfers', JSON.stringify(recentTransfers.value))
+
+      messageType.value = 'success'
+      message.value = `⏳ Transfer of $${Number(form.value.amount).toFixed(2)} via ${selectedMethod.value} submitted successfully and is pending admin approval. Your balance will be updated once approved.`
+      step.value = 1
+      selectedMethod.value = ''
+
+      // Reset form
+      form.value = {
+        amount: '',
+        email: '',
+        phone: '',
+        walletAddress: '',
+        coin: '',
+        recipientName: '',
+        country: '',
+        currency: 'GBP',
+        note: '',
+        bankName: '',
+        accountNumber: '',
+        routingNumber: '',
+        swiftCode: '',
+        date: new Date().toISOString().split('T')[0]
+      }
+    } else {
+      messageType.value = 'error'
+      message.value = res.error || 'Transfer failed. Please try again.'
+    }
+  } catch (e: any) {
+    messageType.value = 'error'
+    message.value = 'Network error. Please check your connection and try again.'
+  } finally {
     isLoading.value = false
-    step.value = 1
-    selectedMethod.value = ''
-  }, 1200)
+  }
 }
 
 const route = useRoute()

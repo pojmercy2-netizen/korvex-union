@@ -1,9 +1,9 @@
 import { z } from 'zod'
-import { eq } from 'drizzle-orm'
+import { eq, and } from 'drizzle-orm'
 import { useDb } from '../../../database/client'
 import { notifications } from '../../../database/schema/notifications'
 import { users } from '../../../database/schema/users'
-import { withErrorHandler } from '../../../utils/error'
+import { withErrorHandler, badRequest } from '../../../utils/error'
 import { requireAdmin } from '../../../utils/auth'
 import { logAdminAction } from '../../../utils/adminLog'
 import { sendSuccess } from '../../../utils/response'
@@ -12,7 +12,8 @@ const createNotificationSchema = z.object({
   title: z.string().min(1, 'Title is required'),
   body: z.string().min(1, 'Body is required'),
   type: z.string().optional().default('info'),
-  userId: z.string().optional().nullable()
+  audience: z.string().optional().default('all'),
+  userId: z.string().optional().nullable() // Can be user ID or Email
 })
 
 export default withErrorHandler(async (event) => {
@@ -22,12 +23,28 @@ export default withErrorHandler(async (event) => {
 
   const db = useDb()
 
-  if (validated.userId) {
-    // Single user notification
+  if (validated.audience === 'specific' || validated.userId) {
+    const identifier = validated.userId || ''
+    let targetUserId = identifier
+
+    // If identifier is an email, look up the user ID
+    if (identifier.includes('@')) {
+      const [foundUser] = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.email, identifier.toLowerCase().trim()))
+        .limit(1)
+
+      if (!foundUser) {
+        throw badRequest(`User with email "${identifier}" not found`)
+      }
+      targetUserId = foundUser.id
+    }
+
     const [inserted] = await db
       .insert(notifications)
       .values({
-        userId: validated.userId,
+        userId: targetUserId,
         title: validated.title,
         body: validated.body,
         type: validated.type
@@ -38,20 +55,30 @@ export default withErrorHandler(async (event) => {
       adminId: admin.id,
       action: 'SEND_NOTIFICATION',
       targetType: 'users',
-      targetId: validated.userId,
+      targetId: targetUserId,
       details: { title: validated.title }
     })
 
     return sendSuccess(event, inserted, 'Notification sent successfully')
   } else {
-    // Broadcast notification to all active users
-    const allUsers = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.status, 'active'))
+    // Determine user set based on audience ('all' or 'verified')
+    const query = db.select({ id: users.id }).from(users)
+    
+    if (validated.audience === 'verified') {
+      query.where(
+        and(
+          eq(users.status, 'active'),
+          eq(users.kycStatus, 'verified')
+        )
+      )
+    } else {
+      query.where(eq(users.status, 'active'))
+    }
 
-    if (allUsers.length > 0) {
-      const inserts = allUsers.map(u => ({
+    const targetUsers = await query
+
+    if (targetUsers.length > 0) {
+      const inserts = targetUsers.map(u => ({
         userId: u.id,
         title: validated.title,
         body: validated.body,
@@ -64,9 +91,18 @@ export default withErrorHandler(async (event) => {
     await logAdminAction(event, {
       adminId: admin.id,
       action: 'BROADCAST_NOTIFICATION',
-      details: { title: validated.title, recipientsCount: allUsers.length }
+      details: { 
+        title: validated.title, 
+        audience: validated.audience, 
+        recipientsCount: targetUsers.length 
+      }
     })
 
-    return sendSuccess(event, null, `Notification broadcasted to ${allUsers.length} active users successfully`)
+    return sendSuccess(
+      event, 
+      null, 
+      `Notification sent to ${targetUsers.length} users (${validated.audience}) successfully`
+    )
   }
 })
+
