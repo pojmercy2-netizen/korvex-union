@@ -13,7 +13,9 @@
     "db:migrate": "npx tsx server/database/migrate.ts",
     "db:seed": "npx tsx server/database/seed.ts",
     "db:studio": "drizzle-kit studio",
-    "db:push": "drizzle-kit push"
+    "db:push": "drizzle-kit push",
+    "db:superadmin": "npx tsx server/database/set_superadmin.ts",
+    "build:prod": "node scripts/build-prod.js"
   },
   "dependencies": {
     "@iconify-json/lucide": "^1.2.114",
