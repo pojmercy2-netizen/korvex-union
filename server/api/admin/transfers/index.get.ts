@@ -24,6 +24,8 @@ export default withErrorHandler(async (event) => {
       amount: transfers.amount,
       recipientName: transfers.recipientName,
       recipientEmail: transfers.recipientEmail,
+      walletAddress: transfers.walletAddress,
+      note: transfers.note,
       status: transfers.status,
       createdAt: transfers.createdAt
     })
@@ -42,6 +44,8 @@ export default withErrorHandler(async (event) => {
     amount: parseFloat(t.amount),
     recipientName: t.recipientName,
     recipientEmail: t.recipientEmail,
+    walletAddress: t.walletAddress,
+    note: t.note,
     status: t.status,
     created_at: t.createdAt
   }))

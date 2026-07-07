@@ -9,7 +9,7 @@ import { requireActiveUser } from '../../../utils/auth'
 import { sendSuccess } from '../../../utils/response'
 
 const createTransferSchema = z.object({
-  method: z.enum(['Crypto Transfer', 'Skrill', 'Google Pay', 'Western Union', 'Wise', 'Payoneer']),
+  method: z.enum(['Bank Transfer', 'Crypto Transfer', 'PayPal', 'PayPay', 'Skrill', 'Google Pay', 'Western Union', 'Wise', 'Payoneer']),
   amount: z.number().positive('Amount must be positive'),
   pin: z.string().optional(),
   email: z.string().email().optional().or(z.literal('')),

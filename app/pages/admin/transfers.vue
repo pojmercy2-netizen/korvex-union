@@ -52,7 +52,7 @@
               </td>
               <td>
                 <div class="recipient-cell">
-                  <span class="method-badge" :class="tx.method">{{ tx.method }}</span>
+                  <span class="method-badge" :class="tx.methodClass">{{ tx.method }}</span>
                   <span class="muted-cell">{{ tx.recipientInfo }}</span>
                 </div>
               </td>
@@ -105,6 +105,7 @@ interface Transfer {
   recipientInfo: string
   reference: string
   method: string
+  methodClass?: string
   amount: number
   status: string
   created_at: string
@@ -170,17 +171,46 @@ const fetchTransfers = async () => {
     const res = await auth.apiCall<any>('/admin/transfers', 'GET')
     const raw = res.data?.data?.data ?? res.data?.data ?? res.data
     if (Array.isArray(raw) && raw.length > 0) {
-      transfers.value = raw.map((t: any) => ({
-        id: t.id,
-        senderName: t.userName || t.senderName || 'Unknown',
-        senderEmail: t.userEmail || t.senderEmail || '—',
-        recipientInfo: t.recipientName || t.recipientEmail || t.recipientInfo || '—',
-        reference: t.reference || `TXF-${t.id?.slice(0, 6)?.toUpperCase() || 'N/A'}`,
-        method: (t.method || 'bank').toLowerCase(),
-        amount: typeof t.amount === 'string' ? parseFloat(t.amount) : (t.amount || 0),
-        status: (t.status || 'PENDING').toUpperCase(),
-        created_at: t.created_at || t.createdAt || new Date().toISOString()
-      }))
+      transfers.value = raw.map((t: any) => {
+        const method = t.method || 'Bank Transfer'
+        const methodLower = method.toLowerCase()
+        let methodClass = 'bank'
+        if (methodLower.includes('crypto')) {
+          methodClass = 'crypto'
+        } else if (methodLower.includes('paypal')) {
+          methodClass = 'paypal'
+        } else if (methodLower.includes('paypay')) {
+          methodClass = 'paypay'
+        } else if (methodLower.includes('bank')) {
+          methodClass = 'bank'
+        } else {
+          methodClass = 'bank'
+        }
+
+        let recipientInfo = '—'
+        if (methodLower === 'bank transfer') {
+          recipientInfo = `${t.recipientName || 'Beneficiary'} | Acct: ${t.walletAddress || '—'} | ${t.note || '—'}`
+        } else if (methodLower === 'paypal') {
+          recipientInfo = `Email: ${t.recipientEmail || '—'} (${t.recipientName || '—'})`
+        } else if (methodLower === 'paypay') {
+          recipientInfo = `Phone/ID: ${t.recipientPhone || '—'}${t.recipientName ? ` (${t.recipientName})` : ''}`
+        } else {
+          recipientInfo = t.recipientName || t.recipientEmail || t.recipientPhone || t.walletAddress || t.recipientInfo || '—'
+        }
+
+        return {
+          id: t.id,
+          senderName: t.userName || t.senderName || 'Unknown',
+          senderEmail: t.userEmail || t.senderEmail || '—',
+          recipientInfo,
+          reference: t.reference || `TXF-${t.id?.slice(0, 6)?.toUpperCase() || 'N/A'}`,
+          method,
+          methodClass,
+          amount: typeof t.amount === 'string' ? parseFloat(t.amount) : (t.amount || 0),
+          status: (t.status || 'PENDING').toUpperCase(),
+          created_at: t.created_at || t.createdAt || new Date().toISOString()
+        }
+      })
     } else {
       transfers.value = MOCK
     }

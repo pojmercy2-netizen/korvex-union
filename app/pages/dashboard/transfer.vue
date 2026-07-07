@@ -59,24 +59,70 @@
 
             <!-- ─── BANK TRANSFER ─── -->
             <template v-if="selectedMethod === 'Bank Transfer'">
-              <div class="method-notice unavailable">
-                <Icon name="lucide:alert-circle" class="w-5 h-5" />
-                <div>
-                  <strong>Not Available at the Moment</strong>
-                  <p>Bank Transfer is currently under maintenance. Please try another method or check back later.</p>
-                </div>
+              <div class="form-group">
+                <label class="form-label" for="bankRecipientName">Beneficiary Name</label>
+                <input id="bankRecipientName" type="text" v-model="form.recipientName" placeholder="As on bank account" class="form-input" required />
               </div>
+              <div class="form-group">
+                <label class="form-label" for="bankNameInput">Bank Name</label>
+                <input id="bankNameInput" type="text" v-model="form.bankName" placeholder="e.g. Chase Bank" class="form-input" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="bankAccountNumber">Account Number / IBAN</label>
+                <input id="bankAccountNumber" type="text" v-model="form.accountNumber" placeholder="Enter account number or IBAN" class="form-input" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="bankRoutingNumber">Routing Number / Sort Code</label>
+                <input id="bankRoutingNumber" type="text" v-model="form.routingNumber" placeholder="Routing number / sort code" class="form-input" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="bankSwiftCode">SWIFT / BIC Code</label>
+                <input id="bankSwiftCode" type="text" v-model="form.swiftCode" placeholder="SWIFT/BIC code" class="form-input" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="bankAmount">Amount (USD)</label>
+                <input id="bankAmount" type="number" v-model.number="form.amount" placeholder="0.00" min="1" step="0.01" class="form-input" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="bankNote">Note / Reference (Optional)</label>
+                <input id="bankNote" type="text" v-model="form.note" placeholder="Optional reference" class="form-input" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="bankDate">Transfer Date</label>
+                <input id="bankDate" type="date" v-model="form.date" class="form-input" required />
+              </div>
+              <button type="submit" class="btn btn-primary submit-btn w-full justify-center" :disabled="isLoading">
+                <Icon v-if="isLoading" name="lucide:loader-2" class="w-4 h-4 spin" />
+                <span>{{ isLoading ? 'Processing…' : 'Send via Bank Transfer' }}</span>
+              </button>
             </template>
 
             <!-- ─── PAYPAL ─── -->
             <template v-else-if="selectedMethod === 'PayPal'">
-              <div class="method-notice unavailable">
-                <Icon name="lucide:alert-circle" class="w-5 h-5" />
-                <div>
-                  <strong>Not Available at the Moment</strong>
-                  <p>PayPal transfers are currently under maintenance. Please try another method or check back later.</p>
-                </div>
+              <div class="form-group">
+                <label class="form-label" for="paypalEmail">PayPal Email</label>
+                <input id="paypalEmail" type="email" v-model="form.email" placeholder="recipient@paypal.com" class="form-input" required />
               </div>
+              <div class="form-group">
+                <label class="form-label" for="paypalRecipientName">Recipient Name (Optional)</label>
+                <input id="paypalRecipientName" type="text" v-model="form.recipientName" placeholder="Recipient's Name" class="form-input" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="paypalAmount">Amount (USD)</label>
+                <input id="paypalAmount" type="number" v-model.number="form.amount" placeholder="0.00" min="1" step="0.01" class="form-input" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="paypalNote">Note (Optional)</label>
+                <input id="paypalNote" type="text" v-model="form.note" placeholder="What's this for?" class="form-input" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="paypalDate">Transfer Date</label>
+                <input id="paypalDate" type="date" v-model="form.date" class="form-input" required />
+              </div>
+              <button type="submit" class="btn btn-primary submit-btn w-full justify-center" :disabled="isLoading">
+                <Icon v-if="isLoading" name="lucide:loader-2" class="w-4 h-4 spin" />
+                <span>{{ isLoading ? 'Processing…' : 'Send via PayPal' }}</span>
+              </button>
             </template>
 
             <!-- ─── CRYPTO TRANSFER ─── -->
@@ -235,6 +281,34 @@
               </button>
             </template>
 
+            <!-- ─── PAYPAY ─── -->
+            <template v-else-if="selectedMethod === 'PayPay'">
+              <div class="form-group">
+                <label class="form-label" for="paypayPhone">Phone Number / PayPay ID</label>
+                <input id="paypayPhone" type="text" v-model="form.phone" placeholder="+81 90-0000-0000 or PayPay ID" class="form-input" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="paypayRecipientName">Recipient Name (Optional)</label>
+                <input id="paypayRecipientName" type="text" v-model="form.recipientName" placeholder="Recipient's Name" class="form-input" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="paypayAmount">Amount (USD)</label>
+                <input id="paypayAmount" type="number" v-model.number="form.amount" placeholder="0.00" min="1" step="0.01" class="form-input" required />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="paypayNote">Note (Optional)</label>
+                <input id="paypayNote" type="text" v-model="form.note" placeholder="What's this for?" class="form-input" />
+              </div>
+              <div class="form-group">
+                <label class="form-label" for="paypayDate">Transfer Date</label>
+                <input id="paypayDate" type="date" v-model="form.date" class="form-input" required />
+              </div>
+              <button type="submit" class="btn btn-primary submit-btn w-full justify-center" :disabled="isLoading">
+                <Icon v-if="isLoading" name="lucide:loader-2" class="w-4 h-4 spin" />
+                <span>{{ isLoading ? 'Processing…' : 'Send via PayPay' }}</span>
+              </button>
+            </template>
+
           </form>
         </template>
 
@@ -377,6 +451,7 @@ const methods = [
   { id: 'Bank Transfer',   icon: 'lucide:landmark',   color: 'text-blue-500' },
   { id: 'Crypto Transfer', icon: 'lucide:bitcoin',    color: 'text-amber-500' },
   { id: 'PayPal',          icon: 'lucide:credit-card',color: 'text-blue-700' },
+  { id: 'PayPay',          icon: 'lucide:qr-code',    color: 'text-red-500' },
   { id: 'Skrill',          icon: 'lucide:wallet',     color: 'text-purple-600' },
   { id: 'Google Pay',      icon: 'lucide:smartphone', color: 'text-emerald-500' },
   { id: 'Western Union',   icon: 'lucide:globe',      color: 'text-yellow-600' },
@@ -399,9 +474,6 @@ const goToStep2 = () => {
 }
 
 const handleTransfer = () => {
-  // Unavailable methods — don't submit
-  if (['Bank Transfer', 'PayPal'].includes(selectedMethod.value)) return
-
   if (!form.value.amount || Number(form.value.amount) <= 0) {
     messageType.value = 'error'
     message.value = 'Please enter a valid amount.'
@@ -453,14 +525,26 @@ const executeTransferSubmission = async () => {
       note: form.value.note || ''
     }
 
-    // Attach method-specific fields
-    if (form.value.email)         payload.email = form.value.email
-    if (form.value.phone)         payload.phone = form.value.phone
-    if (form.value.walletAddress) payload.walletAddress = form.value.walletAddress
-    if (form.value.coin)          payload.coin = form.value.coin
-    if (form.value.recipientName) payload.recipientName = form.value.recipientName
-    if (form.value.country)       payload.country = form.value.country
-    if (form.value.currency)      payload.currency = form.value.currency
+    if (selectedMethod.value === 'Bank Transfer') {
+      payload.recipientName = form.value.recipientName
+      payload.walletAddress = form.value.accountNumber
+      payload.note = `Bank: ${form.value.bankName} | Routing: ${form.value.routingNumber} | SWIFT: ${form.value.swiftCode}${form.value.note ? ' | ' + form.value.note : ''}`
+    } else if (selectedMethod.value === 'PayPal') {
+      payload.email = form.value.email
+      payload.recipientName = form.value.recipientName || 'PayPal Recipient'
+    } else if (selectedMethod.value === 'PayPay') {
+      payload.phone = form.value.phone
+      payload.recipientName = form.value.recipientName || ''
+    } else {
+      // Attach other method-specific fields
+      if (form.value.email)         payload.email = form.value.email
+      if (form.value.phone)         payload.phone = form.value.phone
+      if (form.value.walletAddress) payload.walletAddress = form.value.walletAddress
+      if (form.value.coin)          payload.coin = form.value.coin
+      if (form.value.recipientName) payload.recipientName = form.value.recipientName
+      if (form.value.country)       payload.country = form.value.country
+      if (form.value.currency)      payload.currency = form.value.currency
+    }
 
     const res = await auth.apiCall<any>('/dashboard/transfers', 'POST', payload)
 
