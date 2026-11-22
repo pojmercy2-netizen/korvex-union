@@ -1,6 +1,5 @@
 [build]
   command = "node scripts/build-prod.js"
-  publish = ".output/public"
 
 [build.environment]
   NODE_VERSION = "20"
