@@ -13,10 +13,12 @@ export function useDb() {
       throw new Error('DATABASE_URL is not configured. Set it in your .env file.')
     }
 
+    const isRemote = !connectionString.includes('localhost') && !connectionString.includes('127.0.0.1')
     const client = postgres(connectionString, {
       max: 10,
       idle_timeout: 20,
-      connect_timeout: 10
+      connect_timeout: 10,
+      ssl: isRemote ? 'require' : false
     })
 
     _db = drizzle(client, { schema })

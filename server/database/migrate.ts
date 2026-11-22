@@ -12,7 +12,8 @@ async function main() {
   }
 
   console.log('Connecting database for migrations...')
-  const migrationClient = postgres(url, { max: 1 })
+  const isRemote = !url.includes('localhost') && !url.includes('127.0.0.1')
+  const migrationClient = postgres(url, { max: 1, ssl: isRemote ? 'require' : false })
   const db = drizzle(migrationClient)
 
   console.log('Running migrations...')

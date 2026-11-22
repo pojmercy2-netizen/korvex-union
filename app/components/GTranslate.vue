@@ -4,7 +4,6 @@
 
 <script setup lang="ts">
 onMounted(() => {
-  // Set the configuration before loading the script
   if (typeof window !== 'undefined') {
     (window as any).gtranslateSettings = {
       default_language: 'en',
@@ -12,12 +11,21 @@ onMounted(() => {
       flag_style: '3d'
     }
 
-    // Only inject the script once
-    if (!document.querySelector('script[src*="gtranslate"]')) {
-      const script = document.createElement('script')
-      script.src = 'https://cdn.gtranslate.net/widgets/latest/float.js'
-      script.defer = true
-      document.body.appendChild(script)
+    const loadGTranslate = () => {
+      // Only inject the script once
+      if (!document.querySelector('script[src*="gtranslate"]')) {
+        const script = document.createElement('script')
+        script.src = 'https://cdn.gtranslate.net/widgets/latest/float.js'
+        script.defer = true
+        document.body.appendChild(script)
+      }
+    }
+
+    // Load after hydration without competing for initial bandwidth
+    if (document.readyState === 'complete') {
+      setTimeout(loadGTranslate, 1500)
+    } else {
+      window.addEventListener('load', () => setTimeout(loadGTranslate, 1500), { once: true })
     }
   }
 })

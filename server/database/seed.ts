@@ -19,7 +19,8 @@ async function main() {
   }
 
   console.log('Connecting to database for seeding...')
-  const client = postgres(url)
+  const isRemote = !url.includes('localhost') && !url.includes('127.0.0.1')
+  const client = postgres(url, { max: 5, ssl: isRemote ? 'require' : false })
   const db = drizzle(client)
 
   // Clear existing data

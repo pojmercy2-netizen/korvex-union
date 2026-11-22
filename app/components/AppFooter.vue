@@ -6,7 +6,15 @@
         <div class="footer-brand">
           <div class="footer-logo">
             <div class="logo-icon">
-              <img src="/logo.png" alt="Korvex Union Logo" class="logo-img" />
+              <img
+                src="/logo.png"
+                alt="Korvex Union Logo"
+                class="logo-img"
+                loading="lazy"
+                decoding="async"
+                width="160"
+                height="107"
+              />
             </div>
           </div>
           <p class="footer-desc">

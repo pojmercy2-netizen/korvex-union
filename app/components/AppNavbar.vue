@@ -4,7 +4,15 @@
 
       <!-- Logo -->
       <NuxtLink to="/" class="navbar-logo" @click="closeMobileMenu">
-        <img src="/logo.png" alt="Korvex Union" class="logo-img" />
+        <img
+          src="/logo.png"
+          alt="Korvex Union"
+          class="logo-img"
+          width="180"
+          height="120"
+          fetchpriority="high"
+          decoding="async"
+        />
       </NuxtLink>
 
       <!-- Desktop Nav Links -->

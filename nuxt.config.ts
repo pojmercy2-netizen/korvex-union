@@ -25,9 +25,41 @@ export default defineNuxtConfig({
     }
   },
 
+  nitro: {
+    compressPublicAssets: true,
+    minify: true
+  },
+
   routeRules: {
-    '/resources': { redirect: '/' },
-    '/resources/**': { redirect: '/' }
+    // Marketing pages: Incremental Static Regeneration / Edge Caching
+    // Netlify Edge serves them in <30ms worldwide with zero lambda cold start
+    '/': { isr: 3600 },
+    '/about': { isr: 3600 },
+    '/business': { isr: 3600 },
+    '/personal': { isr: 3600 },
+    '/loans': { isr: 3600 },
+    '/investments': { isr: 3600 },
+
+    // Static redirects
+    '/resources': { redirect: { to: '/', statusCode: 301 } },
+    '/resources/**': { redirect: { to: '/', statusCode: 301 } },
+
+    // Edge cache settings endpoint so public visits don't invoke serverless functions
+    '/api/settings': { cache: { maxAge: 3600, staleMaxAge: 86400 } },
+
+    // Auth & Dashboard pages are client-side authenticated; SPA mode delivers instant HTML shell
+    '/login': { ssr: false },
+    '/register': { ssr: false },
+    '/admin/login': { ssr: false },
+    '/dashboard/**': { ssr: false },
+    '/admin/**': { ssr: false },
+
+    // Static assets long-term cache headers
+    '/_nuxt/**': { headers: { 'cache-control': 'public, max-age=31536000, immutable' } },
+    '/logo.png': { headers: { 'cache-control': 'public, max-age=604800, stale-while-revalidate=86400' } },
+    '/about-us.png': { headers: { 'cache-control': 'public, max-age=604800, stale-while-revalidate=86400' } },
+    '/banking-services.png': { headers: { 'cache-control': 'public, max-age=604800, stale-while-revalidate=86400' } },
+    '/favicon.png': { headers: { 'cache-control': 'public, max-age=604800, stale-while-revalidate=86400' } }
   },
 
   css: ['~/assets/css/main.css'],
@@ -50,15 +82,16 @@ export default defineNuxtConfig({
       title: 'Korvex Union — Bank Smarter. Live Better.',
       meta: [
         { charset: 'utf-8' },
-        { name: 'viewport', content: 'width=device-width, initial-scale=1' },
+        { name: 'viewport', content: 'width=device-width, initial-scale=1, viewport-fit=cover' },
         { name: 'description', content: 'Korvex Union is a secure, premium digital banking platform designed to help you manage today and build for tomorrow.' },
-        { name: 'theme-color', content: '#0A192F' }
+        { name: 'theme-color', content: '#0A192F' },
+        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' },
+        { name: 'format-detection', content: 'telephone=no' }
       ],
       link: [
         { rel: 'icon', type: 'image/png', href: '/favicon.png' },
-        { rel: 'preconnect', href: 'https://fonts.googleapis.com' },
-        { rel: 'preconnect', href: 'https://fonts.gstatic.com', crossorigin: '' },
-        { rel: 'stylesheet', href: 'https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap' }
+        { rel: 'apple-touch-icon', href: '/favicon.png' }
       ]
     }
   },

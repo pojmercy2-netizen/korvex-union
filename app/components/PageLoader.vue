@@ -7,7 +7,15 @@
   >
     <!-- Brand lockup -->
     <div class="page-loader-brand">
-      <img src="/logo.png" alt="Korvex Union Bank" class="page-loader-logo" />
+      <img
+        src="/logo.png"
+        alt="Korvex Union Bank"
+        class="page-loader-logo"
+        width="220"
+        height="147"
+        fetchpriority="high"
+        decoding="async"
+      />
     </div>
 
     <!-- Progress bar -->
@@ -42,29 +50,35 @@ const statusIdx = ref(0)
 let timer1: ReturnType<typeof setTimeout>
 let timer2: ReturnType<typeof setTimeout>
 let interval: ReturnType<typeof setInterval>
+let safetyTimer: ReturnType<typeof setTimeout>
+
+const dismissLoader = () => {
+  if (exiting.value) return
+  clearInterval(interval)
+  exiting.value = true
+  timer2 = setTimeout(() => {
+    visible.value = false
+  }, 250)
+}
 
 onMounted(() => {
   // Cycle status messages
   interval = setInterval(() => {
     statusIdx.value = (statusIdx.value + 1) % statusMessages.length
-  }, 200)
+  }, 180)
 
-  // Simulated load completion timer
-  timer1 = setTimeout(() => {
-    clearInterval(interval)
-    exiting.value = true
+  // Fast smooth dismiss: 250ms snappy animation on hydration
+  timer1 = setTimeout(dismissLoader, 250)
 
-    // Unmount after exit animation (300ms)
-    timer2 = setTimeout(() => {
-      visible.value = false
-    }, 300)
-  }, 600)
+  // Hard safety timeout: loader never blocks longer than 1.5s even if hydration or slow assets delay
+  safetyTimer = setTimeout(dismissLoader, 1500)
 })
 
 onBeforeUnmount(() => {
   clearInterval(interval)
   clearTimeout(timer1)
   clearTimeout(timer2)
+  clearTimeout(safetyTimer)
 })
 </script>
 
@@ -81,20 +95,28 @@ onBeforeUnmount(() => {
   background: linear-gradient(135deg, #ffffff 0%, #f0f6ff 60%, #e8f0fe 100%);
   gap: 32px;
 
-  /* entrance */
-  animation: loader-fade-in 0.15s ease-out both;
+  /* entrance + automatic safeguard fallback if JS takes long on weak LTE */
+  animation: loader-fade-in 0.15s ease-out both, loader-auto-dismiss 0.4s ease-in 1.8s forwards;
+}
+
+@keyframes loader-auto-dismiss {
+  to {
+    opacity: 0;
+    visibility: hidden;
+    pointer-events: none;
+  }
 }
 
 /* exit class toggled by JS */
 .page-loader-overlay.loader-exit {
-  animation: loader-fade-out 0.3s ease-in both;
+  animation: loader-fade-out 0.25s ease-in both;
   pointer-events: none;
 }
 
 .page-loader-logo {
-  height: 160px;
+  height: 140px;
   width: auto;
-  max-width: 680px;
+  max-width: 320px;
   object-fit: contain;
 }
 

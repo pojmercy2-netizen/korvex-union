@@ -10,7 +10,8 @@ async function main() {
   const url = process.env.DATABASE_URL
   if (!url) throw new Error('DATABASE_URL missing!')
 
-  const client = postgres(url, { max: 1 })
+  const isRemote = !url.includes('localhost') && !url.includes('127.0.0.1')
+  const client = postgres(url, { max: 1, ssl: isRemote ? 'require' : false })
   const db = drizzle(client)
 
   // 1. List all users

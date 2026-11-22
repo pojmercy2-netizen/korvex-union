@@ -5,7 +5,15 @@
         <!-- Image -->
         <div class="about-image-wrap">
           <div class="about-image-frame">
-            <img src="/about-us.png" alt="Korvex Union team at work" class="about-image" />
+            <img
+              src="/about-us.png"
+              alt="Korvex Union team at work"
+              class="about-image"
+              loading="lazy"
+              decoding="async"
+              width="600"
+              height="600"
+            />
             <div class="about-image-overlay" />
           </div>
           <!-- Floating stat pill -->

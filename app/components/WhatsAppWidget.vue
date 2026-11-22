@@ -58,7 +58,8 @@ const fetchSettings = async () => {
 }
 
 onMounted(() => {
-  fetchSettings()
+  // Delay background fetch so it doesn't block initial page load / hydration
+  setTimeout(fetchSettings, 800)
 })
 </script>
 
