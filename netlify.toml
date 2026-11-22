@@ -1,9 +1,10 @@
 [build]
   command = "node scripts/build-prod.js"
+  publish = ".output/public"
 
 [build.environment]
   NODE_VERSION = "20"
-  NPM_FLAGS = "--legacy-peer-deps"
+  NPM_FLAGS = "--include=dev"
 
 [[headers]]
   for = "/_nuxt/*"
